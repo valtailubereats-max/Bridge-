@@ -1,0 +1,176 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  /* Overwrite Tailwind Slate Colors with dynamic CSS variables to support Day/Night Theme swapping out-of-the-box */
+  --color-slate-950: var(--theme-slate-950);
+  --color-slate-900: var(--theme-slate-900);
+  --color-slate-850: var(--theme-slate-850);
+  --color-slate-800: var(--theme-slate-800);
+  --color-slate-750: var(--theme-slate-750);
+  --color-slate-700: var(--theme-slate-700);
+  --color-slate-600: var(--theme-slate-600);
+  --color-slate-500: var(--theme-slate-500);
+  --color-slate-400: var(--theme-slate-400);
+  --color-slate-300: var(--theme-slate-300);
+  --color-slate-200: var(--theme-slate-200);
+  --color-slate-100: var(--theme-slate-100);
+}
+
+/* Day Mode (Light Theme) Variables */
+:root {
+  --theme-slate-950: #ffffff; /* pure white header background */
+  --theme-slate-900: #f1f5f9; /* light slate background */
+  --theme-slate-850: #f8fafc; /* white card background */
+  --theme-slate-800: #ffffff; /* white card background */
+  --theme-slate-750: #e2e8f0; /* light borders */
+  --theme-slate-700: #e2e8f0; /* light borders */
+  --theme-slate-600: #64748b; /* slate-500 text */
+  --theme-slate-500: #64748b; /* slate-500 text */
+  --theme-slate-400: #334155; /* slate-700 text */
+  --theme-slate-300: #1e293b; /* slate-800 text */
+  --theme-slate-200: #0f172a; /* slate-900 text */
+  --theme-slate-100: #0f172a; /* slate-900 text */
+}
+
+/* Night Mode (High Contrast Dark Theme) Variables */
+.theme-dark {
+  --theme-slate-950: #000000; /* pure black header */
+  --theme-slate-900: #000000; /* pitch black background */
+  --theme-slate-850: #09090b; /* zinc-950 card background on hover */
+  --theme-slate-800: #09090b; /* zinc-950 card background */
+  --theme-slate-750: #27272a; /* zinc-800 borders */
+  --theme-slate-700: #27272a; /* zinc-800 borders */
+  --theme-slate-600: #a1a1aa; /* zinc-400 text */
+  --theme-slate-500: #a1a1aa; /* zinc-400 text */
+  --theme-slate-400: #d4d4d8; /* zinc-300 text */
+  --theme-slate-300: #f4f4f5; /* zinc-100 text */
+  --theme-slate-200: #ffffff; /* pure white text */
+  --theme-slate-100: #ffffff; /* pure white text */
+}
+
+/* Custom styling for a smooth mobile experience */
+* {
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+body {
+  touch-action: manipulation;
+  user-select: none;
+}
+
+/* Leaflet Map Tiles Filter for Dark Mode - Reduces visual glare on night travels */
+.theme-dark .leaflet-tile-container {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+.theme-dark #map-canvas-container {
+  background: #000000 !important;
+}
+
+/* Animation helpers for danger alerts */
+@keyframes pulse-danger {
+  0%, 100% {
+    background-color: #b91c1c;
+  }
+  50% {
+    background-color: #7f1d1d;
+  }
+}
+
+.animate-pulse-danger {
+  animation: pulse-danger 1.5s infinite;
+}
+
+/* Leaflet Popup styling overrides */
+.leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.45) !important; /* nearly transparent slate-900 */
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  color: #ffffff !important;      /* high contrast white text for perfect legibility */
+  border-radius: 1.5rem !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  padding: 4px !important;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5) !important;
+  transform: scale(0.95) !important;
+  transform-origin: center bottom !important;
+}
+
+.leaflet-popup-tip-container {
+  transform: scale(0.95) !important;
+  transform-origin: center top !important;
+}
+
+.leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+.leaflet-popup-close-button {
+  color: #f87171 !important; /* light red */
+  font-size: 26px !important; /* much larger and easily clickable */
+  font-weight: bold !important;
+  width: 36px !important; /* larger click area */
+  height: 36px !important;
+  line-height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  top: 10px !important;
+  right: 10px !important;
+  background: rgba(15, 23, 42, 0.85) !important;
+  border-radius: 9999px !important;
+  border: 1px solid rgba(239, 68, 68, 0.4) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.leaflet-popup-close-button:hover {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #ef4444 !important;
+  transform: scale(1.1) !important;
+}
+
+/* Map height and rounding for a clean container */
+#map-canvas-container {
+  height: 100% !important;
+  border-radius: 0 !important;
+  transition: all 0.35s ease-in-out;
+}
+
+/* Day Mode Leaflet Popup Overrides */
+.theme-light .leaflet-popup-content-wrapper {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  color: #0f172a !important; /* dark slate text */
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15) !important;
+}
+
+.theme-light .leaflet-popup-tip {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+}
+
+.theme-light .leaflet-popup-close-button {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #ef4444 !important;
+  border: 1px solid rgba(239, 68, 68, 0.2) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+.theme-light .leaflet-popup-close-button:hover {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #ef4444 !important;
+}
+
+
+
