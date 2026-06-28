@@ -26,8 +26,8 @@ export default function ConfigurationModal({
     return parseFloat(Math.max(0, val).toFixed(2)).toString();
   });
   const [apelido, setApelido] = useState<string>(currentConfig.apelido_veiculo || '');
-  const [raio, setRaio] = useState<300 | 500 | 800>(currentConfig.raio_alerta || 500);
-  const [raioCaptura, setRaioCaptura] = useState<number>(currentConfig.raio_captura_pontes || 50);
+  const [raio, setRaio] = useState<150 | 300 | 500 | 800>(currentConfig.raio_alerta || 300);
+  const [raioCaptura, setRaioCaptura] = useState<number>(currentConfig.raio_captura_pontes || 100);
   const [error, setError] = useState<string>('');
 
   const handleAlturaChange = (value: string) => {
@@ -74,7 +74,7 @@ export default function ConfigurationModal({
             <Truck className="h-6 w-6" id="config-truck-icon" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white font-sans">Configuração do Veículo</h2>
+            <h2 className="text-xl font-bold text-slate-100 font-sans">Configuração do Veículo</h2>
             <p className="text-xs text-slate-400">Defina os limites para os alertas de pontes baixas</p>
           </div>
         </div>
@@ -101,7 +101,7 @@ export default function ConfigurationModal({
                 value={altura}
                 onChange={(e) => handleAlturaChange(e.target.value)}
                 required
-                className="w-full h-14 px-4 bg-slate-900 border border-slate-700 rounded-2xl text-lg font-bold text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                className="w-full h-14 px-4 bg-slate-900 border border-slate-700 rounded-2xl text-lg font-bold text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
                 id="input-vehicle-height"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-sm">metros</span>
@@ -122,7 +122,7 @@ export default function ConfigurationModal({
                 placeholder="Ex: 3.60"
                 value={alturaMinima}
                 onChange={(e) => setAlturaMinima(e.target.value)}
-                className="w-full h-14 px-4 bg-slate-900 border border-slate-700 rounded-2xl text-lg font-bold text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                className="w-full h-14 px-4 bg-slate-900 border border-slate-700 rounded-2xl text-lg font-bold text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                 id="input-min-bridge-height"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-sm">metros</span>
@@ -142,7 +142,7 @@ export default function ConfigurationModal({
               placeholder="Ex: Minha Iveco, Camião Renault"
               value={apelido}
               onChange={(e) => setApelido(e.target.value)}
-              className="w-full h-12 px-4 bg-slate-900 border border-slate-700 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+              className="w-full h-12 px-4 bg-slate-900 border border-slate-700 rounded-2xl text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
               maxLength={25}
               id="input-vehicle-nickname"
             />
@@ -154,21 +154,21 @@ export default function ConfigurationModal({
               <Bell className="h-4 w-4 text-slate-400" />
               Raio de Alerta Padrão
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              {([300, 500, 800] as const).map((r) => (
+            <div className="grid grid-cols-4 gap-2">
+              {([150, 300, 500, 800] as const).map((r) => (
                 <button
                   key={r}
                   type="button"
                   onClick={() => setRaio(r)}
-                  className={`py-3 rounded-2xl font-semibold border text-sm transition-all flex flex-col items-center justify-center cursor-pointer ${
+                  className={`py-3 rounded-2xl font-semibold border text-xs transition-all flex flex-col items-center justify-center cursor-pointer ${
                     raio === r
                       ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20'
                       : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
                   }`}
                   id={`radio-raio-${r}`}
                 >
-                  <span className="text-base font-bold">{r}m</span>
-                  <span className="text-[10px] opacity-75">raio</span>
+                  <span className="text-sm font-bold">{r}m</span>
+                  <span className="text-[9px] opacity-75">raio</span>
                 </button>
               ))}
             </div>
@@ -212,7 +212,7 @@ export default function ConfigurationModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-white rounded-2xl font-bold text-sm transition-all cursor-pointer"
+                className="flex-1 py-3 bg-slate-900 border border-slate-750 hover:bg-slate-850 text-slate-100 rounded-2xl font-bold text-sm transition-all cursor-pointer"
                 id="btn-config-cancel"
               >
                 Cancelar

@@ -195,13 +195,13 @@ export default function BridgeForm({
             <div className="p-2 bg-red-500/10 text-red-500 rounded-xl">
               <MapPin className="h-5 w-5" />
             </div>
-            <h3 className="text-lg font-bold text-white font-sans">
+            <h3 className="text-lg font-bold text-slate-100 font-sans">
               {editingBridge ? 'Editar Ponte Baixa' : 'Cadastrar Ponte Baixa'}
             </h3>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-700/50 rounded-xl text-slate-400 hover:text-white transition-all cursor-pointer"
+            className="p-2 hover:bg-slate-700/50 rounded-xl text-slate-400 hover:text-slate-100 transition-all cursor-pointer"
             id="btn-close-form"
             type="button"
           >
@@ -219,7 +219,7 @@ export default function BridgeForm({
                 type="button"
                 onClick={handleGetCurrentLocation}
                 disabled={fetchingGps}
-                className="w-full h-12 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 text-white font-bold rounded-2xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-sm border border-slate-600"
+                className="w-full h-12 bg-slate-900 border border-slate-700 hover:bg-slate-850 disabled:bg-slate-800 text-slate-100 font-bold rounded-2xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-sm"
                 id="btn-form-gps"
               >
                 <Navigation className={`h-4 w-4 ${fetchingGps ? 'animate-spin text-red-400' : ''}`} />
@@ -242,7 +242,7 @@ export default function BridgeForm({
                 value={latitude}
                 onChange={(e) => setLatitude(e.target.value)}
                 required
-                className="w-full h-11 px-3 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-red-500 text-sm font-mono"
+                className="w-full h-11 px-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm font-mono"
                 id="form-lat"
               />
             </div>
@@ -255,7 +255,7 @@ export default function BridgeForm({
                 value={longitude}
                 onChange={(e) => setLongitude(e.target.value)}
                 required
-                className="w-full h-11 px-3 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-red-500 text-sm font-mono"
+                className="w-full h-11 px-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm font-mono"
                 id="form-lng"
               />
             </div>
@@ -274,7 +274,7 @@ export default function BridgeForm({
                 value={altura}
                 onChange={(e) => setAltura(e.target.value)}
                 required
-                className="w-full h-12 px-3 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold text-base focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full h-12 px-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-400 font-bold text-base focus:outline-none focus:ring-2 focus:ring-red-500"
                 id="form-height"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">m</span>
@@ -291,7 +291,7 @@ export default function BridgeForm({
               placeholder="Ex: Viaduto Ferroviário de Portsmouth"
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              className="w-full h-11 px-3 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm"
+              className="w-full h-11 px-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-400 text-sm"
               id="form-name"
             />
           </div>
@@ -306,7 +306,7 @@ export default function BridgeForm({
               value={notas}
               onChange={(e) => setNotas(e.target.value)}
               rows={2}
-              className="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               id="form-notes"
             />
           </div>

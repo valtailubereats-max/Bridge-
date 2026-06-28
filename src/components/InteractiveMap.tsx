@@ -940,19 +940,7 @@ export default function InteractiveMap({
           )}
         </div>
 
-        {/* Floating "Voltar a seguir" (Resume Following) Overlay */}
-        {gpsActive && !isFollowing && currentLocation && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1005] shadow-xl">
-            <button
-              onClick={resumeFollowing}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all cursor-pointer shadow-md border border-blue-400/20 active:scale-95 whitespace-nowrap"
-              id="btn-resume-following"
-            >
-              <Navigation className="h-3.5 w-3.5 animate-bounce" />
-              <span>Voltar a seguir</span>
-            </button>
-          </div>
-        )}
+        {/* Floating "Voltar a seguir" has been integrated directly into the blinking main Follow button */}
 
         {/* Helper overlay when GPS is off (compact visual bar, placed higher to not overlap with bottom floating buttons) */}
         {!gpsActive && (
@@ -1066,18 +1054,31 @@ export default function InteractiveMap({
           {/* Follow Me Button */}
           {gpsActive && (
             <button
-              onClick={toggleFollowMe}
+              onClick={!isFollowing && currentLocation ? resumeFollowing : toggleFollowMe}
               className={`w-14 h-14 rounded-full flex flex-col items-center justify-center transition-all cursor-pointer shadow-2xl active:scale-95 border pointer-events-auto ${
                 isFollowing
                   ? 'bg-blue-600 text-white border-blue-400/30 hover:bg-blue-500 hover:border-blue-400/50'
-                  : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-750 hover:border-slate-500'
+                  : currentLocation
+                    ? 'bg-yellow-400 text-black border-yellow-500 hover:bg-yellow-300 animate-pulse ring-4 ring-yellow-400/50 font-black'
+                    : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-750 hover:border-slate-500'
               }`}
-              id="btn-toggle-follow"
+              id={!isFollowing && currentLocation ? 'btn-resume-following' : 'btn-toggle-follow'}
               title={isFollowing ? 'Parar de seguir automaticamente' : 'Seguir minha localização automaticamente'}
             >
-              <Navigation className={`h-5 w-5 shrink-0 ${isFollowing ? 'text-white animate-pulse' : 'text-slate-400'}`} />
+              <Navigation className={`h-5 w-5 shrink-0 ${
+                isFollowing 
+                  ? 'text-white animate-pulse' 
+                  : currentLocation 
+                    ? 'text-black animate-bounce' 
+                    : 'text-slate-400'
+              }`} />
               <span className="text-[8px] font-black uppercase tracking-tight leading-none mt-0.5 whitespace-nowrap">
-                {isFollowing ? 'A Seguir' : 'Seguir'}
+                {isFollowing 
+                  ? 'A Seguir' 
+                  : currentLocation 
+                    ? 'Voltar' 
+                    : 'Seguir'
+                }
               </span>
             </button>
           )}

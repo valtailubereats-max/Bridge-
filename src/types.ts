@@ -40,7 +40,7 @@ export interface Bridge {
 export interface VehicleConfig {
   altura_veiculo: number; // in meters
   apelido_veiculo: string; // optional
-  raio_alerta: 300 | 500 | 800; // in meters
+  raio_alerta: 150 | 300 | 500 | 800; // in meters
   configurado: boolean;
   deposito_central: string; // name of selected central depot
   raio_captura_pontes: number; // in miles (50, 100, 150)

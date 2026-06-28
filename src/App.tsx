@@ -66,7 +66,8 @@ export default function App() {
         const parsed = JSON.parse(saved);
         return {
           deposito_central: 'Southampton',
-          raio_captura_pontes: 50,
+          raio_captura_pontes: 100,
+          raio_alerta: 300,
           altura_minima_ponte: parsed.altura_veiculo ? parseFloat((parsed.altura_veiculo - 0.20).toFixed(2)) : 0,
           ...parsed
         };
@@ -77,9 +78,9 @@ export default function App() {
     return {
       altura_veiculo: 0,
       apelido_veiculo: '',
-      raio_alerta: 500,
+      raio_alerta: 300,
       deposito_central: 'Southampton',
-      raio_captura_pontes: 50,
+      raio_captura_pontes: 100,
       altura_minima_ponte: 0,
       configurado: false
     };
@@ -800,7 +801,7 @@ export default function App() {
       )}
 
       {/* 3 Circular Navigation Buttons (Bolinhas) - Extremely Clean Header */}
-      <div className="flex justify-center items-center gap-6 py-5 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30">
+      <div className="flex justify-center items-center gap-6 py-5 sticky top-0 z-30 chumbo-ranhuras backdrop-blur-md">
         <button
           onClick={() => {
             setActiveTab(1);
