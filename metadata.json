@@ -1,6 +1,6 @@
 {
   "name": "Low Bridge Alert",
   "description": "Aplicativo PWA de alerta de pontes baixas e obstáculos para motoristas de veículos altos (vans/camiões).",
-  "requestFramePermissions": ["geolocation"],
+  "requestFramePermissions": ["geolocation", "camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

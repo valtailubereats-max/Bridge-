@@ -18,6 +18,7 @@ interface BridgeFormProps {
   currentLocation: Coordinates | null;
   editingBridge?: Bridge | null;
   prefilledCoordinates?: Coordinates | null;
+  prefilledPhotoDataUrl?: string;
 }
 
 export default function BridgeForm({
@@ -28,6 +29,7 @@ export default function BridgeForm({
   currentLocation,
   editingBridge = null,
   prefilledCoordinates = null,
+  prefilledPhotoDataUrl = '',
 }: BridgeFormProps) {
   const [nome, setNome] = useState(editingBridge?.nome || '');
   const [altura, setAltura] = useState(editingBridge && editingBridge.altura_maxima !== null ? editingBridge.altura_maxima.toString() : '');
@@ -42,7 +44,7 @@ export default function BridgeForm({
       : (prefilledCoordinates ? prefilledCoordinates.longitude.toString() : '')
   );
   const [notas, setNotas] = useState(editingBridge?.notas || '');
-  const [photoDataUrl, setPhotoDataUrl] = useState<string>(editingBridge?.photoDataUrl || '');
+  const [photoDataUrl, setPhotoDataUrl] = useState<string>(editingBridge?.photoDataUrl || prefilledPhotoDataUrl || '');
   
   const [fetchingGps, setFetchingGps] = useState(false);
   const [gpsError, setGpsError] = useState('');
@@ -64,8 +66,11 @@ export default function BridgeForm({
     } else if (prefilledCoordinates) {
       setLatitude(prefilledCoordinates.latitude.toString());
       setLongitude(prefilledCoordinates.longitude.toString());
+      if (prefilledPhotoDataUrl) {
+        setPhotoDataUrl(prefilledPhotoDataUrl);
+      }
     }
-  }, [editingBridge, prefilledCoordinates]);
+  }, [editingBridge, prefilledCoordinates, prefilledPhotoDataUrl]);
 
   const handleGetCurrentLocation = () => {
     setFetchingGps(true);

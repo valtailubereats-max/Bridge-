@@ -3,7 +3,7 @@ import L from 'leaflet';
 import { Bridge, Coordinates, ConfidenceStatus } from '../types';
 import { getDistance, formatDistance, getGoogleMapsDirectionUrl } from '../utils/geo';
 import { getGroupedBridges, getConfidenceStatusLabel } from '../utils/bridgeGroup';
-import { Navigation, Compass, Map, Filter, ZoomIn, CheckCircle2, Plus, X, Radio } from 'lucide-react';
+import { Navigation, Compass, Map, Filter, ZoomIn, CheckCircle2, Plus, X, Radio, Camera, Image as ImageIcon } from 'lucide-react';
 
 interface InteractiveMapProps {
   bridges: Bridge[];
@@ -18,11 +18,20 @@ interface InteractiveMapProps {
   onEdit?: (bridge: Bridge) => void;
   onDelete?: (id: string) => void;
   temporaryBridgeCoords?: Coordinates | null;
-  onChangeTemporaryCoords?: (coords: Coordinates) => void;
+  onChangeTemporaryCoords?: (coords: Coordinates | null) => void;
   activeTheme?: 'light' | 'dark';
   isAddBridgeButtonEnabled?: boolean;
   onStartMonitoring?: () => void;
   onStopMonitoring?: () => void;
+  isCapturingMode?: boolean;
+  captureCountdown?: number | null;
+  capturedPhotoUrl?: string;
+  hasDraggedPino?: boolean;
+  onConfirmLocation?: () => void;
+  onCancelCapture?: () => void;
+  onUseCurrentLocation?: () => void;
+  onTriggerCamera?: () => void;
+  onStartCaptureMode?: () => void;
 }
 
 export default function InteractiveMap({
@@ -43,6 +52,15 @@ export default function InteractiveMap({
   isAddBridgeButtonEnabled = false,
   onStartMonitoring,
   onStopMonitoring,
+  isCapturingMode = false,
+  captureCountdown = null,
+  capturedPhotoUrl = '',
+  hasDraggedPino = false,
+  onConfirmLocation,
+  onCancelCapture,
+  onUseCurrentLocation,
+  onTriggerCamera,
+  onStartCaptureMode,
 }: InteractiveMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -102,6 +120,11 @@ export default function InteractiveMap({
   const handleQuickAddClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (temporaryBridgeCoords) return;
+
+    if (onStartCaptureMode) {
+      onStartCaptureMode();
+      return;
+    }
 
     let lat: number | null = null;
     let lng: number | null = null;
@@ -884,45 +907,146 @@ export default function InteractiveMap({
 
           {/* Draggable Pending Pin Adjustment Card */}
           {temporaryBridgeCoords && (
-            <div className="self-center w-full max-w-xs bg-slate-900/95 border border-amber-500/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2 backdrop-blur animate-in slide-in-from-top duration-300 pointer-events-auto mt-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
-                  <h4 className="text-[10px] font-black text-slate-100 uppercase tracking-wider">Ajustar Local</h4>
+            isCapturingMode ? (
+              <div className="self-center w-full max-w-xs bg-slate-900/95 border border-amber-500 rounded-2xl p-4 shadow-2xl flex flex-col gap-3 backdrop-blur animate-in slide-in-from-top duration-300 pointer-events-auto mt-2">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-red-500 animate-pulse shrink-0" />
+                    <h4 className="text-[11px] font-black text-slate-100 uppercase tracking-wider">Captura de Ponte</h4>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold text-red-400 bg-red-950/40 border border-red-900/50 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0 animate-pulse">
+                    <Radio className="h-3 w-3 shrink-0 animate-ping" />
+                    {captureCountdown !== null ? `${captureCountdown}s` : 'Ativo'}
+                  </span>
                 </div>
-                <span className="text-[9px] font-mono font-bold text-slate-400 bg-slate-950/80 px-2 py-0.5 rounded-md">
-                  Lat: {temporaryBridgeCoords.latitude.toFixed(5)}, Lng: {temporaryBridgeCoords.longitude.toFixed(5)}
-                </span>
+
+                {/* Status description */}
+                <div className="bg-slate-950/60 p-2 rounded-xl text-[10px] border border-slate-800">
+                  <span className="text-slate-400">Estado: </span>
+                  {captureCountdown === 0 ? (
+                    <span className="font-bold text-red-400">Tempo esgotado (Acompanhamento parado)</span>
+                  ) : hasDraggedPino ? (
+                    <span className="font-bold text-amber-400">GPS suspenso (Pino arrastado manualmente)</span>
+                  ) : (
+                    <span className="font-bold text-emerald-400">A seguir GPS em tempo real...</span>
+                  )}
+                  <div className="text-slate-500 mt-1 font-mono text-[9px] truncate">
+                    Lat: {temporaryBridgeCoords.latitude.toFixed(5)}, Lng: {temporaryBridgeCoords.longitude.toFixed(5)}
+                  </div>
+                </div>
+
+                {/* Photo Section */}
+                <div className="flex items-center gap-3 bg-slate-950/40 p-2 rounded-xl border border-slate-800">
+                  <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center shrink-0 border border-slate-700 overflow-hidden">
+                    {capturedPhotoUrl ? (
+                      <img src={capturedPhotoUrl} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5 text-slate-500" />
+                    )}
+                  </div>
+                  <div className="flex-1 flex flex-col gap-1">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                      {capturedPhotoUrl ? 'Foto da Ponte' : 'Sem Fotografia'}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTriggerCamera?.();
+                      }}
+                      className="px-2.5 py-1 text-[10px] font-black bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 rounded-md transition-all self-start cursor-pointer flex items-center gap-1 active:scale-95"
+                    >
+                      <Camera className="h-3 w-3 text-blue-400" />
+                      <span>{capturedPhotoUrl ? 'Refazer Foto' : 'Tirar Foto'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Actions Grid */}
+                <div className="flex flex-col gap-2 mt-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCancelCapture?.();
+                      }}
+                      className="h-10 text-xs font-bold bg-slate-800 hover:bg-slate-750 active:bg-slate-850 text-slate-300 rounded-xl transition-all border border-slate-700 cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                    >
+                      <X className="h-4 w-4 text-red-400 shrink-0" />
+                      <span>Cancelar</span>
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUseCurrentLocation?.();
+                      }}
+                      disabled={!gpsActive || !currentLocation || !hasDraggedPino}
+                      className={`h-10 text-xs font-bold rounded-xl transition-all border cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 ${
+                        !gpsActive || !currentLocation || !hasDraggedPino
+                          ? 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
+                          : 'bg-indigo-950/60 border-indigo-500/30 hover:bg-indigo-900 text-indigo-300'
+                      }`}
+                      title="Voltar a alinhar o pino com a sua posição GPS atual"
+                    >
+                      <Compass className="h-4 w-4 text-indigo-400 shrink-0" />
+                      <span>Usar GPS</span>
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onConfirmLocation?.();
+                    }}
+                    className="h-11 text-xs font-black bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/20 active:scale-95"
+                  >
+                    <CheckCircle2 className="h-4 w-4 text-white shrink-0" />
+                    <span>Confirmar Localização</span>
+                  </button>
+                </div>
               </div>
-              <p className="text-[10px] text-slate-300 leading-normal font-medium">
-                Arraste o pino laranja no mapa para a localização precisa.
-              </p>
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onChangeTemporaryCoords?.(null);
-                  }}
-                  className="h-9 text-xs font-bold bg-slate-800 hover:bg-slate-750 active:bg-slate-850 text-slate-300 rounded-xl transition-all border border-slate-700 cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  <X className="h-3.5 w-3.5 text-red-400 shrink-0" />
-                  <span>Cancelar</span>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onQuickAdd) {
-                      onQuickAdd(temporaryBridgeCoords.latitude, temporaryBridgeCoords.longitude);
-                    }
-                    onChangeTemporaryCoords?.(null);
-                  }}
-                  className="h-9 text-xs font-black bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/20 active:scale-95"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5 text-white shrink-0" />
-                  <span>Confirmar</span>
-                </button>
+            ) : (
+              <div className="self-center w-full max-w-xs bg-slate-900/95 border border-amber-500/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2 backdrop-blur animate-in slide-in-from-top duration-300 pointer-events-auto mt-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+                    <h4 className="text-[10px] font-black text-slate-100 uppercase tracking-wider">Ajustar Local</h4>
+                  </div>
+                  <span className="text-[9px] font-mono font-bold text-slate-400 bg-slate-950/80 px-2 py-0.5 rounded-md">
+                    Lat: {temporaryBridgeCoords.latitude.toFixed(5)}, Lng: {temporaryBridgeCoords.longitude.toFixed(5)}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-300 leading-normal font-medium">
+                  Arraste o pino laranja no mapa para a localização precisa.
+                </p>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChangeTemporaryCoords?.(null);
+                    }}
+                    className="h-9 text-xs font-bold bg-slate-800 hover:bg-slate-750 active:bg-slate-850 text-slate-300 rounded-xl transition-all border border-slate-700 cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                  >
+                    <X className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                    <span>Cancelar</span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onQuickAdd) {
+                        onQuickAdd(temporaryBridgeCoords.latitude, temporaryBridgeCoords.longitude);
+                      }
+                      onChangeTemporaryCoords?.(null);
+                    }}
+                    className="h-9 text-xs font-black bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/20 active:scale-95"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 text-white shrink-0" />
+                    <span>Confirmar</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            )
           )}
 
           {selectedPoint && (

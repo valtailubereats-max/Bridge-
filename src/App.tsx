@@ -35,7 +35,8 @@ import {
   CheckCircle2,
   Sun,
   Moon,
-  SunMoon
+  SunMoon,
+  Globe
 } from 'lucide-react';
 
 export default function App() {
@@ -197,9 +198,119 @@ export default function App() {
     return (saved as 'all' | 'restricted' | 'nearby') || 'all';
   });
 
-  // --- Quick Add State ---
+  // --- Quick Add & Captura de Ponte State ---
   const [quickAddCoords, setQuickAddCoords] = useState<Coordinates | null>(null);
-  const [quickAddCountdown, setQuickAddCountdown] = useState<number | null>(null);
+  const [isCapturingMode, setIsCapturingMode] = useState<boolean>(false);
+  const [captureCountdown, setCaptureCountdown] = useState<number | null>(null);
+  const [capturedPhotoUrl, setCapturedPhotoUrl] = useState<string>('');
+  const [hasDraggedPino, setHasDraggedPino] = useState<boolean>(false);
+
+  const handleAutoCameraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCapturedPhotoUrl(reader.result as string);
+        setToast({
+          message: 'Fotografia da ponte registada temporariamente!',
+          type: 'success'
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const triggerAutoCamera = () => {
+    const input = document.getElementById('auto-camera-input') as HTMLInputElement;
+    if (input) {
+      input.click();
+    }
+  };
+
+  const handleStartCaptureMode = () => {
+    // 1. Create immediate temporary pin (using currentLocation or a fallback)
+    const lat = currentLocation ? currentLocation.latitude : (mapPrefilledCoords ? mapPrefilledCoords.latitude : 50.803600);
+    const lng = currentLocation ? currentLocation.longitude : (mapPrefilledCoords ? mapPrefilledCoords.longitude : -1.075600);
+    
+    setQuickAddCoords({ latitude: lat, longitude: lng });
+    setHasDraggedPino(false);
+    setCapturedPhotoUrl('');
+    
+    // 2. Start capturing mode
+    setIsCapturingMode(true);
+    setCaptureCountdown(60);
+    
+    // Force start monitoring if not active so we get GPS signals
+    if (!gpsActive) {
+      handleStartMonitoring();
+    }
+    
+    // 3. Try to open the camera automatically
+    setTimeout(() => {
+      triggerAutoCamera();
+    }, 150);
+
+    setToast({
+      message: 'Modo Captura de Ponte Ativo! Acompanhando GPS por 1 minuto...',
+      type: 'info'
+    });
+  };
+
+  const handleConfirmLocation = () => {
+    // If we have current location, use it to substitute the pin position, otherwise use the dragged pin position
+    const finalCoords = currentLocation || quickAddCoords;
+    if (finalCoords) {
+      setMapPrefilledCoords(finalCoords);
+      setEditingBridge(null);
+      setShowAddBridgeForm(true);
+    }
+    
+    setIsCapturingMode(false);
+    setCaptureCountdown(null);
+    setToast({
+      message: 'Localização confirmada! Defina os detalhes da ponte.',
+      type: 'success'
+    });
+  };
+
+  const handleCancelCapture = () => {
+    setIsCapturingMode(false);
+    setCaptureCountdown(null);
+    setQuickAddCoords(null);
+    setCapturedPhotoUrl('');
+    setHasDraggedPino(false);
+    setToast({
+      message: 'Modo Captura cancelado.',
+      type: 'info'
+    });
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (currentLocation) {
+      setQuickAddCoords(currentLocation);
+      setHasDraggedPino(false);
+      setToast({
+        message: 'A usar localização GPS atual para o pino.',
+        type: 'success'
+      });
+    } else {
+      setToast({
+        message: 'GPS indisponível de momento.',
+        type: 'error'
+      });
+    }
+  };
+
+  const handleTriggerCamera = () => {
+    triggerAutoCamera();
+  };
+
+  const handleTemporaryCoordsChange = (coords: Coordinates | null) => {
+    setQuickAddCoords(coords);
+    if (coords && isCapturingMode) {
+      setHasDraggedPino(true);
+    }
+  };
 
   // --- Toast Notification state ---
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
@@ -213,6 +324,70 @@ export default function App() {
   });
   const [isOsmImporting, setIsOsmImporting] = useState(false);
   const [osmImportingStatus, setOsmImportingStatus] = useState<string | null>(null);
+
+  const [lastImportCoords, setLastImportCoords] = useState<Coordinates | null>(() => {
+    const saved = localStorage.getItem('low_bridge_last_import_coords');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [dismissedOsmImportCoords, setDismissedOsmImportCoords] = useState<Coordinates | null>(null);
+  const [showNewAreaAlert, setShowNewAreaAlert] = useState<boolean>(false);
+
+  // Suggest OSM bridge loading when driver moves to a new uncharted region
+  useEffect(() => {
+    if (!currentLocation || !gpsActive) {
+      setShowNewAreaAlert(false);
+      return;
+    }
+
+    // Convert capturing radius from miles to meters
+    const radiusMeters = (vehicleConfig.raio_captura_pontes || 25) * 1609.34;
+    // We consider it a "new area" if they move more than 70% of the radius away
+    const thresholdMeters = radiusMeters * 0.7;
+
+    if (!lastImportCoords) {
+      // No import done yet. If they already dismissed the prompt nearby, do not show again
+      if (dismissedOsmImportCoords) {
+        const distDismissed = getDistance(
+          currentLocation.latitude,
+          currentLocation.longitude,
+          dismissedOsmImportCoords.latitude,
+          dismissedOsmImportCoords.longitude
+        );
+        if (distDismissed < thresholdMeters) {
+          setShowNewAreaAlert(false);
+          return;
+        }
+      }
+      setShowNewAreaAlert(true);
+    } else {
+      const distImported = getDistance(
+        currentLocation.latitude,
+        currentLocation.longitude,
+        lastImportCoords.latitude,
+        lastImportCoords.longitude
+      );
+
+      // If they dismissed a prompt nearby, don't show it either
+      if (dismissedOsmImportCoords) {
+        const distDismissed = getDistance(
+          currentLocation.latitude,
+          currentLocation.longitude,
+          dismissedOsmImportCoords.latitude,
+          dismissedOsmImportCoords.longitude
+        );
+        if (distDismissed < thresholdMeters) {
+          setShowNewAreaAlert(false);
+          return;
+        }
+      }
+
+      if (distImported > thresholdMeters) {
+        setShowNewAreaAlert(true);
+      } else {
+        setShowNewAreaAlert(false);
+      }
+    }
+  }, [currentLocation, gpsActive, lastImportCoords, dismissedOsmImportCoords, vehicleConfig.raio_captura_pontes]);
 
   useEffect(() => {
     localStorage.setItem('low_bridge_sound_muted', String(isSoundMuted));
@@ -231,6 +406,38 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  // 1-minute countdown timer for Captura de Ponte mode
+  useEffect(() => {
+    let interval: any = null;
+    if (isCapturingMode && captureCountdown !== null && captureCountdown > 0) {
+      interval = setInterval(() => {
+        setCaptureCountdown((prev) => {
+          if (prev === null || prev <= 1) {
+            clearInterval(interval);
+            setToast({
+              message: 'Tempo de acompanhamento GPS esgotado. Mantendo o pino na última posição.',
+              type: 'info'
+            });
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isCapturingMode, captureCountdown]);
+
+  // Sync temporary pin coordinates with current GPS location if not dragged manually
+  useEffect(() => {
+    if (isCapturingMode && captureCountdown !== null && captureCountdown > 0 && !hasDraggedPino) {
+      if (currentLocation) {
+        setQuickAddCoords(currentLocation);
+      }
+    }
+  }, [currentLocation, isCapturingMode, captureCountdown, hasDraggedPino]);
 
 
 
@@ -624,6 +831,11 @@ export default function App() {
           type: 'info'
         });
       }
+
+      // Save last imported coordinates on success to prevent repeated popups in the same region
+      setLastImportCoords(targetCoords);
+      localStorage.setItem('low_bridge_last_import_coords', JSON.stringify(targetCoords));
+
       setOsmImportingStatus(
         `Importação concluída para ${localizacaoTexto}! Novas pontes: ${result.importedBridges.length}. Puladas: ${result.skippedCount}. Erros: ${result.errorCount}.`
       );
@@ -858,7 +1070,49 @@ export default function App() {
         
         {/* BOLINHA 1: MODO PRINCIPAL (Navegação & Mapa) */}
         {activeTab === 1 && (
-          <div className="flex-1 w-full flex flex-col overflow-hidden animate-in fade-in duration-200">
+          <div className="flex-1 w-full flex flex-col overflow-hidden relative animate-in fade-in duration-200">
+            {/* New Region / OSM Auto-import suggestion banner */}
+            {showNewAreaAlert && gpsActive && currentLocation && (
+              <div className="absolute top-16 left-3 right-3 z-[1010] bg-slate-950/95 border border-yellow-500/30 rounded-2xl p-3.5 shadow-2xl backdrop-blur-md animate-in slide-in-from-top-4 fade-in duration-300 flex flex-col sm:flex-row items-center gap-3">
+                <div className="p-2 bg-yellow-400/10 text-yellow-400 rounded-xl shrink-0 animate-pulse">
+                  <Globe className="h-5 w-5" />
+                </div>
+                <div className="flex-1 text-center sm:text-left">
+                  <h4 className="text-xs font-black text-slate-100 leading-snug">Nova região detetada!</h4>
+                  <p className="text-[10px] text-slate-400 mt-0.5 leading-normal">
+                    Encontra-se numa nova área sem pontes carregadas de OpenStreetMap. Deseja importar o raio de {vehicleConfig.raio_captura_pontes || 25} mi?
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 mt-1 sm:mt-0">
+                  <button
+                    onClick={() => {
+                      setDismissedOsmImportCoords(currentLocation);
+                      setShowNewAreaAlert(false);
+                    }}
+                    className="flex-1 sm:flex-initial text-slate-400 hover:text-slate-200 text-[10px] font-bold px-2.5 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    Dispensar
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await handleImportFromOSM();
+                    }}
+                    disabled={isOsmImporting}
+                    className="flex-1 sm:flex-initial bg-yellow-400 hover:bg-yellow-300 text-black text-[10px] font-black px-3 py-1.5 rounded-xl active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-yellow-500/10 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {isOsmImporting ? (
+                      <>
+                        <span className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
+                        <span>A importar...</span>
+                      </>
+                    ) : (
+                      <span>Importar</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* INTERACTIVE MAP (Always visible in Bolinha 1) */}
             <InteractiveMap
               bridges={visibleBridges}
@@ -876,11 +1130,20 @@ export default function App() {
               }}
               onDelete={handleDeleteBridge}
               temporaryBridgeCoords={quickAddCoords}
-              onChangeTemporaryCoords={setQuickAddCoords}
+              onChangeTemporaryCoords={handleTemporaryCoordsChange}
               activeTheme={activeTheme}
               isAddBridgeButtonEnabled={isAddBridgeButtonEnabled}
               onStartMonitoring={handleStartMonitoring}
               onStopMonitoring={handleStopMonitoring}
+              isCapturingMode={isCapturingMode}
+              captureCountdown={captureCountdown}
+              capturedPhotoUrl={capturedPhotoUrl}
+              hasDraggedPino={hasDraggedPino}
+              onConfirmLocation={handleConfirmLocation}
+              onCancelCapture={handleCancelCapture}
+              onUseCurrentLocation={handleUseCurrentLocation}
+              onTriggerCamera={handleTriggerCamera}
+              onStartCaptureMode={handleStartCaptureMode}
             />
 
             {/* Quick add handled instantly */}
@@ -1206,6 +1469,7 @@ export default function App() {
           currentLocation={currentLocation}
           editingBridge={editingBridge}
           prefilledCoordinates={mapPrefilledCoords}
+          prefilledPhotoDataUrl={capturedPhotoUrl}
         />
       )}
 
@@ -1227,6 +1491,16 @@ export default function App() {
           onClose={() => setShowBridgesList(false)}
         />
       )}
+
+      {/* Hidden Auto-camera input for quick capturing */}
+      <input
+        type="file"
+        id="auto-camera-input"
+        accept="image/*"
+        capture="environment"
+        onChange={handleAutoCameraChange}
+        className="hidden"
+      />
 
     </div>
   );
