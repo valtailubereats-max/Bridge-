@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import { motion, AnimatePresence } from 'motion/react';
 import { Bridge, Coordinates, ConfidenceStatus } from '../types';
 import { getDistance, formatDistance, getGoogleMapsDirectionUrl } from '../utils/geo';
-import { getGroupedBridges, getConfidenceStatusLabel } from '../utils/bridgeGroup';
-import { Navigation, Compass, Map, Filter, ZoomIn, CheckCircle2, Plus, X, Radio, Camera, Image as ImageIcon } from 'lucide-react';
+import { getGroupedBridges, getConfidenceStatusLabel, BridgeGroup } from '../utils/bridgeGroup';
+import { Navigation, Compass, Map, Filter, ZoomIn, CheckCircle2, Plus, X, Radio, Camera, Image as ImageIcon, Edit, Trash2 } from 'lucide-react';
 
 interface InteractiveMapProps {
   bridges: Bridge[];
@@ -80,6 +81,15 @@ export default function InteractiveMap({
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState<boolean>(false);
   const selectedMarkerRef = useRef<L.Marker | null>(null);
   const tempMarkerRef = useRef<L.Marker | null>(null);
+
+  const [activeConsultationGroupId, setActiveConsultationGroupId] = useState<string | null>(null);
+  const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
+  const [photoZoom, setPhotoZoom] = useState(1);
+
+  const setActiveConsultationGroupIdRef = useRef(setActiveConsultationGroupId);
+  useEffect(() => {
+    setActiveConsultationGroupIdRef.current = setActiveConsultationGroupId;
+  }, [setActiveConsultationGroupId]);
 
   const isFollowingRef = useRef(isFollowing);
   useEffect(() => {
@@ -318,6 +328,14 @@ export default function InteractiveMap({
   const groupedBridges = React.useMemo(() => {
     return getGroupedBridges(mapBridges);
   }, [mapBridges]);
+
+  // Derive activeConsultationGroup dynamically based on activeConsultationGroupId
+  const activeConsultationGroup = React.useMemo(() => {
+    if (!activeConsultationGroupId) return null;
+    return groupedBridges.find(
+      (g) => g.id === activeConsultationGroupId || g.bridges.some((b) => b.id === activeConsultationGroupId)
+    ) || null;
+  }, [activeConsultationGroupId, groupedBridges]);
 
   // Filter groups according to user selection
   const filteredGroups = React.useMemo(() => {
@@ -699,77 +717,13 @@ export default function InteractiveMap({
           iconAnchor: [30, 30],
         });
 
-        // Photo thumbnail layout
-        const photoHtml = group.photoDataUrl
-          ? `
-            <div class="mb-2 rounded-lg overflow-hidden border border-slate-700 h-20 w-full bg-slate-950 flex items-center justify-center shrink-0">
-              <img src="${group.photoDataUrl}" alt="Foto da ponte" class="w-full h-full object-cover" />
-            </div>
-          `
-          : '';
-
-        // Conflict message
-        const conflictWarningHtml = group.isConflict
-          ? `
-            <div class="bg-red-950/60 border border-red-800/80 rounded-lg p-1.5 mb-2 text-[10px] text-red-200 font-medium leading-normal">
-              ⚠️ <b>Altura em disputa:</b> alguns motoristas informaram valores diferentes para esta ponte.
-            </div>
-          `
-          : '';
-
-        const mapsUrl = getGoogleMapsDirectionUrl(bridge.latitude, bridge.longitude);
-        const popupHtml = `
-          <div class="p-1 font-sans space-y-2 text-slate-100 bg-slate-900 rounded-lg max-w-[220px]" style="color: #f1f5f9; min-width: 180px;">
-            ${photoHtml}
-            
-            <div>
-              <h4 class="font-bold text-sm text-white leading-tight">${bridge.nome}</h4>
-              <div class="flex items-center gap-1.5 mt-1">
-                <span class="h-2 w-2 rounded-full inline-block" style="background-color: ${statusColor};"></span>
-                <span class="text-[9px] text-slate-300 font-bold uppercase tracking-wider">${statusLabel}</span>
-              </div>
-            </div>
-
-            ${conflictWarningHtml}
-            
-            <div class="grid grid-cols-2 gap-1.5 py-1 text-xs border-t border-slate-800">
-              <div>
-                <span class="text-[9px] text-slate-400 uppercase font-bold block">Consensual</span>
-                <span class="font-extrabold ${isDanger ? 'text-red-400' : (group.altura_maxima === null ? 'text-amber-400' : 'text-emerald-400')}">${group.altura_maxima !== null ? group.altura_maxima.toFixed(2) + 'm' : 'Incompleta'}</span>
-              </div>
-              <div>
-                <span class="text-[9px] text-slate-400 uppercase font-bold block">Relatórios</span>
-                <span class="font-bold text-slate-300 font-mono">${group.reportsCount} relato(s)</span>
-              </div>
-            </div>
-
-            <div class="text-[9px] text-slate-400 pb-1 flex justify-between">
-              <span>Distância: <b>${distanceStr}</b></span>
-            </div>
-
-            <div class="pt-1 space-y-1">
-              <a href="${mapsUrl}" target="_blank" rel="noreferrer" 
-                 class="inline-flex items-center justify-center gap-1 w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-[10px] no-underline transition-all cursor-pointer">
-                 <span>Rota no Google Maps</span>
-              </a>
-              ${onEdit ? `
-                <button class="popup-edit-btn inline-flex items-center justify-center gap-1 w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-lg font-bold text-[10px] border border-slate-700 transition-all cursor-pointer" data-bridge-id="${bridge.id}">
-                  <span>Editar Ponte</span>
-                </button>
-              ` : ''}
-              ${onDelete ? `
-                <button class="popup-delete-btn inline-flex items-center justify-center gap-1 w-full py-1.5 px-2 bg-red-950/45 hover:bg-red-900/50 border border-red-500/20 text-red-400 hover:text-red-300 rounded-lg font-bold text-[10px] transition-all cursor-pointer" data-bridge-ids="${group.bridges.map((b) => b.id).join(',')}">
-                  <span>Excluir Ponte</span>
-                </button>
-              ` : ''}
-            </div>
-          </div>
-        `;
-
         if (!bridgeMarkersRef.current[item.id]) {
           // Create new marker
           const marker = L.marker(bridgeLatLng, { icon: bridgeIcon }).addTo(map);
-          marker.bindPopup(popupHtml, { className: 'custom-leaflet-popup' });
+          marker.on('click', () => {
+            setActiveConsultationGroupIdRef.current(group.id);
+            map.closePopup();
+          });
 
           // Create alert circle matching the configured radius if it is a dangerous bridge
           let circle: L.Circle | undefined = undefined;
@@ -790,7 +744,12 @@ export default function InteractiveMap({
           const existing = bridgeMarkersRef.current[item.id];
           existing.marker.setLatLng(bridgeLatLng);
           existing.marker.setIcon(bridgeIcon);
-          existing.marker.setPopupContent(popupHtml);
+          
+          existing.marker.off('click');
+          existing.marker.on('click', () => {
+            setActiveConsultationGroupIdRef.current(group.id);
+            map.closePopup();
+          });
 
           // Update circle radius or add if missing
           if (isDanger) {
@@ -1207,6 +1166,264 @@ export default function InteractiveMap({
             </button>
           )}
         </div>
+
+        {/* Active Consultation Complete Draggable Card (Situation 1) */}
+        <AnimatePresence>
+          {activeConsultationGroup && (
+            <motion.div
+              drag
+              dragMomentum={false}
+              dragElastic={0.05}
+              className="absolute top-20 right-3 left-3 md:left-auto md:right-3 md:w-96 z-[1015] bg-slate-950/95 border border-slate-800 rounded-3xl p-4 shadow-2xl backdrop-blur-md text-white pointer-events-auto flex flex-col cursor-grab active:cursor-grabbing select-none"
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.95 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              id="bridge-consultation-complete-card"
+            >
+              {/* Drag bar indicator */}
+              <div className="w-12 h-1 bg-slate-800 rounded-full mx-auto mb-3 shrink-0" />
+
+              <div className="flex items-start justify-between gap-3 shrink-0 mb-3">
+                <div className="min-w-0 flex-1">
+                  <span className="text-[9px] uppercase font-black text-slate-500 tracking-wider">Consulta de Ponte</span>
+                  <h3 className="text-sm font-black text-slate-100 leading-snug truncate">
+                    {activeConsultationGroup.primaryBridge.nome}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setActiveConsultationGroupId(null)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="text-slate-400 hover:text-white hover:bg-slate-900 p-1.5 rounded-lg transition-colors cursor-pointer shrink-0"
+                  title="Fechar consulta"
+                  id="btn-close-consultation-card"
+                >
+                  <X className="h-4.5 w-4.5" />
+                </button>
+              </div>
+
+              {/* Photo representation */}
+              {activeConsultationGroup.photoDataUrl ? (
+                <div 
+                  onClick={() => {
+                    setPhotoZoom(1);
+                    setIsZoomModalOpen(true);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="relative mb-3 rounded-2xl overflow-hidden border border-slate-850 h-36 bg-slate-950 flex items-center justify-center shrink-0 cursor-pointer group"
+                  id="consultation-photo-preview"
+                >
+                  <img 
+                    src={activeConsultationGroup.photoDataUrl} 
+                    alt="Visualização da ponte" 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-350"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <span className="text-[10px] bg-slate-900/80 px-3 py-1.5 rounded-full font-bold border border-slate-700 flex items-center gap-1.5">
+                      <ImageIcon className="h-3.5 w-3.5 text-blue-400 animate-pulse" /> Toque para ampliar
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-3 rounded-2xl border border-dashed border-slate-800/85 p-5 text-center shrink-0 bg-slate-950/20">
+                  <p className="text-[11px] text-slate-500 font-bold">Nenhuma fotografia registada para esta ponte</p>
+                </div>
+              )}
+
+              {/* Stats: Height & Distance */}
+              <div className="grid grid-cols-2 gap-2 mb-3 shrink-0">
+                <div className="bg-slate-900/65 rounded-xl p-2.5 border border-slate-800 flex flex-col justify-center">
+                  <span className="text-[9px] uppercase font-black text-slate-400 tracking-wider block leading-tight">Altura Máxima</span>
+                  <span className={`text-base font-black font-mono mt-0.5 ${
+                    activeConsultationGroup.altura_maxima !== null && activeConsultationGroup.altura_maxima <= vehicleHeight
+                      ? 'text-red-400'
+                      : activeConsultationGroup.altura_maxima === null
+                        ? 'text-amber-400'
+                        : 'text-emerald-400'
+                  }`}>
+                    {activeConsultationGroup.altura_maxima !== null 
+                      ? activeConsultationGroup.altura_maxima.toFixed(2) + 'm' 
+                      : 'Incompleta'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/65 rounded-xl p-2.5 border border-slate-800 flex flex-col justify-center">
+                  <span className="text-[9px] uppercase font-black text-slate-400 tracking-wider block leading-tight">Distância</span>
+                  <span className="text-base font-black font-mono text-blue-400 mt-0.5">
+                    {currentLocation 
+                      ? formatDistance(getDistance(currentLocation.latitude, currentLocation.longitude, activeConsultationGroup.primaryBridge.latitude, activeConsultationGroup.primaryBridge.longitude))
+                      : 'Desconhecida'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Confidence status & Driver notes list */}
+              <div className="bg-slate-900/40 rounded-xl p-3 border border-slate-800/80 space-y-1.5 mb-3 shrink-0 text-left">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400 font-bold">Estado de confiança:</span>
+                  <span 
+                    className="font-extrabold uppercase tracking-wide text-[10px]"
+                    style={{ 
+                      color: 
+                        activeConsultationGroup.confidenceStatus === 'dados_em_conflito'
+                          ? '#f87171'
+                          : activeConsultationGroup.confidenceStatus === 'confirmada_por_multiplos'
+                            ? '#34d399'
+                            : activeConsultationGroup.confidenceStatus === 'reportada_por_1_motorista'
+                              ? '#60a5fa'
+                              : '#94a3b8'
+                    }}
+                  >
+                    {getConfidenceStatusLabel(activeConsultationGroup.confidenceStatus)}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between text-[11px] border-b border-slate-800/50 pb-1.5">
+                  <span className="text-slate-400 font-bold">Total de relatos:</span>
+                  <span className="font-mono font-black text-slate-200">{activeConsultationGroup.reportsCount}</span>
+                </div>
+
+                {activeConsultationGroup.notesList.length > 0 && (
+                  <div className="pt-1.5">
+                    <span className="text-[9px] uppercase font-black text-slate-500 tracking-wider">Notas de Motoristas:</span>
+                    <div 
+                      onPointerDown={(e) => e.stopPropagation()} 
+                      className="max-h-24 overflow-y-auto mt-1 space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-800"
+                    >
+                      {activeConsultationGroup.notesList.map((note, idx) => (
+                        <p key={idx} className="text-[10px] text-slate-300 leading-normal bg-slate-950/40 p-2 rounded-lg border border-slate-900 font-medium">
+                          "{note}"
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Controls */}
+              <div className="space-y-2 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+                <a
+                  href={getGoogleMapsDirectionUrl(activeConsultationGroup.primaryBridge.latitude, activeConsultationGroup.primaryBridge.longitude)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="h-10 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-lg shadow-blue-600/10 border border-blue-500/20"
+                  id="btn-consultation-maps"
+                >
+                  <Map className="h-4 w-4 shrink-0" />
+                  <span>Ver Rota no Google Maps</span>
+                </a>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {onEdit && (
+                    <button
+                      onClick={() => {
+                        onEdit(activeConsultationGroup.primaryBridge);
+                        setActiveConsultationGroupId(null);
+                      }}
+                      className="h-9.5 bg-slate-900 hover:bg-slate-850 active:bg-slate-950 text-slate-300 hover:text-white font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 transition-all border border-slate-800 cursor-pointer active:scale-95"
+                      id="btn-consultation-edit"
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                      <span>Editar</span>
+                    </button>
+                  )}
+
+                  {onDelete && (
+                    <button
+                      onClick={() => {
+                        if (confirm('Tem a certeza que deseja excluir esta ponte?')) {
+                          onDelete(activeConsultationGroup.bridges.map((b) => b.id).join(','));
+                          setActiveConsultationGroupId(null);
+                        }
+                      }}
+                      className="h-9.5 bg-red-950/30 hover:bg-red-900/40 active:bg-red-950/50 border border-red-500/15 text-red-400 hover:text-red-300 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                      id="btn-consultation-delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Excluir</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Full Screen Zoomable/Draggable Photo Overlay Modal (Situation 1 Extra) */}
+        <AnimatePresence>
+          {isZoomModalOpen && activeConsultationGroup && activeConsultationGroup.photoDataUrl && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[2000] bg-black/95 flex flex-col items-center justify-center p-4 select-none"
+              id="consultation-photo-zoom-modal"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => {
+                  setIsZoomModalOpen(false);
+                  setPhotoZoom(1);
+                }}
+                className="absolute top-4 right-4 h-10 w-10 bg-slate-900/80 hover:bg-slate-800 text-white rounded-full flex items-center justify-center border border-slate-750 active:scale-95 transition-all cursor-pointer shadow-lg z-[2010]"
+                title="Fechar ampliação"
+                id="btn-close-zoom-photo"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              {/* Draggable/Zoomable Image container */}
+              <div className="w-full h-full flex items-center justify-center overflow-hidden relative">
+                <motion.img
+                  src={activeConsultationGroup.photoDataUrl}
+                  alt="Visualização da foto ampliada"
+                  drag={photoZoom > 1}
+                  dragMomentum={false}
+                  dragElastic={0.05}
+                  animate={{ scale: photoZoom }}
+                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                  className={`max-w-full max-h-[80vh] object-contain select-none shadow-2xl rounded-lg ${
+                    photoZoom > 1 ? 'cursor-grab active:cursor-grabbing' : ''
+                  }`}
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+
+              {/* Bottom zoom controls bar */}
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-slate-900/90 border border-slate-800 px-4.5 py-2 rounded-full shadow-2xl backdrop-blur-md z-[2010]">
+                <button
+                  type="button"
+                  onClick={() => setPhotoZoom((prev) => Math.max(1, prev - 0.5))}
+                  className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center font-bold text-white transition-all cursor-pointer active:scale-90"
+                  title="Diminuir Zoom"
+                >
+                  -
+                </button>
+                <span className="text-[11px] font-black font-mono text-slate-300 min-w-[48px] text-center">
+                  {(photoZoom * 100).toFixed(0)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPhotoZoom((prev) => Math.min(4, prev + 0.5))}
+                  className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center font-bold text-white transition-all cursor-pointer active:scale-90"
+                  title="Aumentar Zoom"
+                >
+                  +
+                </button>
+                <div className="h-4 w-[1px] bg-slate-800" />
+                <button
+                  type="button"
+                  onClick={() => setPhotoZoom(1)}
+                  disabled={photoZoom === 1}
+                  className="px-2.5 py-1 text-[10px] font-black uppercase text-blue-400 hover:bg-slate-800 disabled:opacity-30 rounded-lg transition-all cursor-pointer"
+                >
+                  Reset
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
