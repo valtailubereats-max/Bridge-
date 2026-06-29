@@ -75,9 +75,12 @@ export default function AlertOverlay({
 
       {/* Message Info */}
       <p className="text-[10px] text-slate-400 leading-normal">
-        {isDanger 
-          ? 'ESTA PONTE É MAIS BAIXA QUE O SEU VEÍCULO! Perigo de colisão.' 
-          : 'Ponte com restrição de altura próxima, mas acima do limite do seu veículo.'}
+        {bridge.altura_maxima === null
+          ? 'Ponte cadastrada sem altura confirmada. Redobre a atenção!'
+          : (isDanger 
+              ? 'ESTA PONTE É MAIS BAIXA QUE O SEU VEÍCULO! Perigo de colisão.' 
+              : 'Ponte com restrição de altura próxima, mas acima do limite do seu veículo.')
+        }
       </p>
 
       {/* Stats Row */}
@@ -89,7 +92,7 @@ export default function AlertOverlay({
         <div className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800 flex flex-col justify-center">
           <span className="text-[9px] uppercase font-bold text-slate-400 block leading-tight">Limite / Veículo</span>
           <span className="text-sm font-black text-yellow-400 font-mono">
-            {bridge.altura_maxima ? bridge.altura_maxima.toFixed(2) + 'm' : 'Pendente'} <span className="text-slate-400 font-normal">vs</span> {vehicleHeight.toFixed(2)}m
+            {bridge.altura_maxima !== null ? bridge.altura_maxima.toFixed(2) + 'm' : 'S/ Altura'} <span className="text-slate-400 font-normal">vs</span> {vehicleHeight.toFixed(2)}m
           </span>
         </div>
       </div>

@@ -277,12 +277,12 @@ export default function BridgeList({
                         isDanger
                           ? 'border-red-500 bg-red-950/60 text-red-400 shadow-md shadow-red-500/10'
                           : (group.altura_maxima === null
-                              ? 'border-slate-500 bg-slate-900 text-slate-400'
+                              ? 'border-amber-500 bg-slate-900 text-amber-400 shadow-md shadow-amber-500/10'
                               : 'border-emerald-500 bg-emerald-950/40 text-emerald-400')
                       }`}
                     >
                       <span className="text-sm font-black leading-none">{group.altura_maxima !== null ? group.altura_maxima.toFixed(1) : '—'}</span>
-                      <span className="text-[8px] font-bold leading-none mt-0.5">{group.altura_maxima !== null ? 'metros' : 'pendente'}</span>
+                      <span className="text-[8px] font-bold leading-none mt-0.5">{group.altura_maxima !== null ? 'metros' : 'incompleta'}</span>
                     </div>
                     <span className="text-[8px] text-slate-500 block mt-1">Consenso</span>
                   </div>
@@ -353,7 +353,7 @@ export default function BridgeList({
                                 )}
                               </div>
                               <span className="text-xs font-bold text-slate-300 font-mono">
-                                Altura: <strong className="text-white">{subBridge.altura_maxima !== null ? `${subBridge.altura_maxima.toFixed(2)}m` : 'Pendente'}</strong>
+                                Altura: <strong className="text-white">{subBridge.altura_maxima !== null ? `${subBridge.altura_maxima.toFixed(2)}m` : 'Incompleta'}</strong>
                               </span>
                             </div>
 

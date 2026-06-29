@@ -673,20 +673,20 @@ export default function InteractiveMap({
           ? 'border-dashed border-red-500 animate-pulse' 
           : (isDanger 
               ? 'border-red-500' 
-              : (group.altura_maxima === null ? 'border-slate-500' : 'border-emerald-500'));
+              : (group.altura_maxima === null ? 'border-amber-600' : 'border-emerald-500'));
         const badgeBg = isDanger 
           ? 'bg-red-600' 
-          : (group.altura_maxima === null ? 'bg-slate-600' : 'bg-emerald-600');
+          : (group.altura_maxima === null ? 'bg-amber-500' : 'bg-emerald-600');
 
-        const heightDisplay = group.altura_maxima !== null ? `${group.altura_maxima.toFixed(1)}m` : 'Pendente';
+        const heightDisplay = group.altura_maxima !== null ? `${group.altura_maxima.toFixed(1)}m` : 'Incompleta';
         const arrowBgColorClass = isDanger 
           ? 'red-600' 
-          : (group.altura_maxima === null ? 'slate-600' : 'emerald-600');
+          : (group.altura_maxima === null ? 'amber-500' : 'emerald-600');
 
         const markerHtml = `
           <div class="flex flex-col items-center select-none cursor-pointer">
-            <div class="relative flex items-center justify-center ${badgeBg} text-white font-extrabold text-xs px-2.5 py-1 rounded-lg shadow-lg border-2 ${borderClass} whitespace-nowrap">
-              <span>${group.isConflict ? '⚠️ ' : (isDanger ? '🛑 ' : (group.altura_maxima === null ? '❓ ' : '✅ '))}${heightDisplay}</span>
+            <div class="relative flex items-center justify-center ${badgeBg} text-white font-extrabold text-[10px] px-2 py-1 rounded-lg shadow-lg border-2 ${borderClass} whitespace-nowrap">
+              <span>${group.isConflict ? '⚠️ ' : (isDanger ? '🛑 ' : (group.altura_maxima === null ? '⚠️ ' : '✅ '))}${heightDisplay}</span>
               <div class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-${arrowBgColorClass}"></div>
             </div>
           </div>
@@ -735,7 +735,7 @@ export default function InteractiveMap({
             <div class="grid grid-cols-2 gap-1.5 py-1 text-xs border-t border-slate-800">
               <div>
                 <span class="text-[9px] text-slate-400 uppercase font-bold block">Consensual</span>
-                <span class="font-extrabold ${isDanger ? 'text-red-400' : (group.altura_maxima === null ? 'text-slate-400' : 'text-emerald-400')}">${group.altura_maxima !== null ? group.altura_maxima.toFixed(2) + 'm' : 'Pendente'}</span>
+                <span class="font-extrabold ${isDanger ? 'text-red-400' : (group.altura_maxima === null ? 'text-amber-400' : 'text-emerald-400')}">${group.altura_maxima !== null ? group.altura_maxima.toFixed(2) + 'm' : 'Incompleta'}</span>
               </div>
               <div>
                 <span class="text-[9px] text-slate-400 uppercase font-bold block">Relatórios</span>

@@ -205,16 +205,55 @@ export default function App() {
   const [capturedPhotoUrl, setCapturedPhotoUrl] = useState<string>('');
   const [hasDraggedPino, setHasDraggedPino] = useState<boolean>(false);
 
+  const handleSaveQuickBridge = (coords: Coordinates, photoUrl?: string) => {
+    const brandNew: Bridge = {
+      id: `motorista-${Math.random().toString(36).substr(2, 9)}`,
+      nome: `Captura Rápida - ${new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      altura_maxima: null, // no height defined yet
+      notas: photoUrl ? 'Captura rápida com foto' : 'Captura rápida sem foto',
+      data_criacao: new Date().toISOString(),
+      origem: 'motorista',
+      confirmada: false,
+      photoDataUrl: photoUrl || undefined,
+      reportsCount: 1,
+      reportedHeights: [],
+      confidenceStatus: 'nao_confirmada',
+      source: 'quick_add',
+      status: 'active', // must be 'active' for alarm!
+    };
+    
+    setBridges((prev) => [brandNew, ...prev]);
+    
+    setIsCapturingMode(false);
+    setCaptureCountdown(null);
+    setQuickAddCoords(null);
+    setCapturedPhotoUrl('');
+    setHasDraggedPino(false);
+    
+    setToast({
+      message: 'Ponte registada e ativa com sucesso! Altura poderá ser definida depois.',
+      type: 'success'
+    });
+  };
+
   const handleAutoCameraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setCapturedPhotoUrl(reader.result as string);
-        setToast({
-          message: 'Fotografia da ponte registada temporariamente!',
-          type: 'success'
-        });
+        const photoUrl = reader.result as string;
+        setCapturedPhotoUrl(photoUrl);
+        const finalCoords = currentLocation || quickAddCoords;
+        if (finalCoords) {
+          handleSaveQuickBridge(finalCoords, photoUrl);
+        } else {
+          setToast({
+            message: 'Fotografia registada! Confirme a localização para concluir.',
+            type: 'success'
+          });
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -251,26 +290,21 @@ export default function App() {
     }, 150);
 
     setToast({
-      message: 'Modo Captura de Ponte Ativo! Acompanhando GPS por 1 minuto...',
+      message: 'Modo Captura de Ponte Ativo! Tire a foto ou confirme a localização.',
       type: 'info'
     });
   };
 
   const handleConfirmLocation = () => {
-    // If we have current location, use it to substitute the pin position, otherwise use the dragged pin position
     const finalCoords = currentLocation || quickAddCoords;
     if (finalCoords) {
-      setMapPrefilledCoords(finalCoords);
-      setEditingBridge(null);
-      setShowAddBridgeForm(true);
+      handleSaveQuickBridge(finalCoords, capturedPhotoUrl);
+    } else {
+      setToast({
+        message: 'Não foi possível determinar a localização.',
+        type: 'error'
+      });
     }
-    
-    setIsCapturingMode(false);
-    setCaptureCountdown(null);
-    setToast({
-      message: 'Localização confirmada! Defina os detalhes da ponte.',
-      type: 'success'
-    });
   };
 
   const handleCancelCapture = () => {
