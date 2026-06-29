@@ -3,7 +3,11 @@ import { getDistance } from './geo';
 
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+  'https://z.overpass-api.de/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
   'https://overpass.nchc.org.tw/api/interpreter'
 ];
 
@@ -15,6 +19,9 @@ export function parseMaxHeight(maxHeightStr: string): number | null {
   if (!maxHeightStr) return null;
   
   let str = maxHeightStr.trim().toLowerCase();
+  
+  // Support European comma decimal separator by replacing it with a dot
+  str = str.replace(',', '.');
   
   // Remove trailing "m", "meters", "metres", " meters"
   str = str.replace(/(meters|metres|m)$/, '').trim();
@@ -100,8 +107,15 @@ export async function importBridgesFromOSM(
     }
   });
 
-  const radiusMeters = radiusMiles * 1609.34;
-  onProgress(`A procurar pontes baixas num raio de ${radiusMiles} milhas (${(radiusMeters / 1000).toFixed(0)} km)...`);
+  // Cap radius to a maximum of 25 miles to prevent Overpass server timeouts/rejections due to massive payload sizes
+  const queryRadiusMiles = Math.min(radiusMiles, 25);
+  const radiusMeters = queryRadiusMiles * 1609.34;
+  
+  if (radiusMiles > 25) {
+    onProgress(`A procurar pontes num raio otimizado de 25 milhas (40 km) para evitar lentidão e timeouts no servidor...`);
+  } else {
+    onProgress(`A procurar pontes baixas num raio de ${radiusMiles} milhas (${(radiusMeters / 1000).toFixed(0)} km)...`);
+  }
 
   try {
     const elements = await fetchBridgesByCoordinates(lat, lon, radiusMeters);

@@ -577,24 +577,30 @@ export default function App() {
   };
 
   const handleImportFromOSM = async () => {
-    if (!currentLocation) {
+    // Tenta usar a localização do GPS; caso contrário, usa a localização do Depósito Central ativo
+    const targetCoords = currentLocation || getDepotCoords(vehicleConfig.deposito_central);
+
+    if (!targetCoords) {
       setToast({
-        message: 'Por favor, ligue a monitorização e aguarde que o sinal GPS seja obtido para importar pontes na sua área.',
+        message: 'Por favor, selecione um depósito ou ative o GPS para importar pontes.',
         type: 'error'
       });
-      alert('Localização GPS atual indisponível. Ative a monitorização GPS e aguarde obter sinal para poder carregar as pontes no raio de onde se encontra.');
       return;
     }
 
+    const localizacaoTexto = currentLocation 
+      ? 'posição GPS atual' 
+      : `região do Depósito Central (${vehicleConfig.deposito_central})`;
+
     setIsOsmImporting(true);
-    setOsmImportingStatus('A iniciar ligação com o Overpass API...');
+    setOsmImportingStatus(`A iniciar ligação com o Overpass API (${localizacaoTexto})...`);
     
     try {
       const { importBridgesFromOSM } = await import('./utils/overpass');
       const result = await importBridgesFromOSM(
         bridges,
-        currentLocation.latitude,
-        currentLocation.longitude,
+        targetCoords.latitude,
+        targetCoords.longitude,
         vehicleConfig.raio_captura_pontes,
         (status) => {
           setOsmImportingStatus(status);
@@ -609,17 +615,17 @@ export default function App() {
           return merged;
         });
         setToast({
-          message: `Sucesso! Foram importadas ${result.importedBridges.length} novas pontes de forma automática.`,
+          message: `Sucesso! Foram importadas ${result.importedBridges.length} novas pontes de forma automática na ${localizacaoTexto}.`,
           type: 'success'
         });
       } else {
         setToast({
-          message: `Nenhuma nova ponte encontrada nesta área. (Puladas: ${result.skippedCount})`,
+          message: `Nenhuma nova ponte encontrada nesta área (${localizacaoTexto}). (Puladas: ${result.skippedCount})`,
           type: 'info'
         });
       }
       setOsmImportingStatus(
-        `Importação concluída! Novas pontes: ${result.importedBridges.length}. Puladas: ${result.skippedCount}. Erros: ${result.errorCount}.`
+        `Importação concluída para ${localizacaoTexto}! Novas pontes: ${result.importedBridges.length}. Puladas: ${result.skippedCount}. Erros: ${result.errorCount}.`
       );
     } catch (error) {
       console.error('Failed to import OSM bridges', error);
