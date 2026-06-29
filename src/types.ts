@@ -30,6 +30,8 @@ export interface Bridge {
   updatedAt?: string;
   height?: number | null;
   notes?: string;
+  verified?: boolean;
+  incomplete?: boolean;
 
   // OSM Overpass specific fields
   osmId?: string;

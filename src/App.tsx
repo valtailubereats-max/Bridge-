@@ -5,6 +5,54 @@ import { getDistance, formatDistance, getDepotCoords } from './utils/geo';
 import { initAudio, stopAlarm } from './utils/audio';
 import { getGroupedBridges } from './utils/bridgeGroup';
 
+// Safe localStorage setter to avoid crashes (QuotaExceededError, etc.)
+const safeLocalStorageSetItem = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (error) {
+    console.error(`Error saving to localStorage for key "${key}":`, error);
+  }
+};
+
+// Compress image via HTML5 Canvas to keep storage usage low (<50KB) and avoid QuotaExceededError
+const compressImage = (base64Str: string, maxWidth = 350, maxHeight = 350): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      } else {
+        resolve(base64Str);
+      }
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+  });
+};
+
 // Subcomponents
 import ConfigurationModal from './components/ConfigurationModal';
 import BridgeForm from './components/BridgeForm';
@@ -99,7 +147,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('low_bridge_theme_setting', themeSetting);
+    safeLocalStorageSetItem('low_bridge_theme_setting', themeSetting);
   }, [themeSetting]);
 
   useEffect(() => {
@@ -206,6 +254,7 @@ export default function App() {
   const [hasDraggedPino, setHasDraggedPino] = useState<boolean>(false);
 
   const handleSaveQuickBridge = (coords: Coordinates, photoUrl?: string) => {
+    const nowIso = new Date().toISOString();
     const brandNew: Bridge = {
       id: `motorista-${Math.random().toString(36).substr(2, 9)}`,
       nome: `Captura Rápida - ${new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`,
@@ -213,7 +262,7 @@ export default function App() {
       longitude: coords.longitude,
       altura_maxima: null, // no height defined yet
       notas: photoUrl ? 'Captura rápida com foto' : 'Captura rápida sem foto',
-      data_criacao: new Date().toISOString(),
+      data_criacao: nowIso,
       origem: 'motorista',
       confirmada: false,
       photoDataUrl: photoUrl || undefined,
@@ -222,6 +271,10 @@ export default function App() {
       confidenceStatus: 'nao_confirmada',
       source: 'quick_add',
       status: 'active', // must be 'active' for alarm!
+      createdAt: nowIso,
+      verified: false,
+      incomplete: true,
+      height: null,
     };
     
     setBridges((prev) => [brandNew, ...prev]);
@@ -242,17 +295,28 @@ export default function App() {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        const photoUrl = reader.result as string;
-        setCapturedPhotoUrl(photoUrl);
-        const finalCoords = currentLocation || quickAddCoords;
-        if (finalCoords) {
-          handleSaveQuickBridge(finalCoords, photoUrl);
-        } else {
-          setToast({
-            message: 'Fotografia registada! Confirme a localização para concluir.',
-            type: 'success'
-          });
+      reader.onloadend = async () => {
+        const rawPhotoUrl = reader.result as string;
+        try {
+          // Compress immediately to prevent QuotaExceededError in localStorage
+          const compressedPhoto = await compressImage(rawPhotoUrl);
+          setCapturedPhotoUrl(compressedPhoto);
+          const finalCoords = currentLocation || quickAddCoords;
+          if (finalCoords) {
+            handleSaveQuickBridge(finalCoords, compressedPhoto);
+          } else {
+            setToast({
+              message: 'Fotografia registada! Confirme a localização para concluir.',
+              type: 'success'
+            });
+          }
+        } catch (error) {
+          console.error("Image compression failed, using original", error);
+          setCapturedPhotoUrl(rawPhotoUrl);
+          const finalCoords = currentLocation || quickAddCoords;
+          if (finalCoords) {
+            handleSaveQuickBridge(finalCoords, rawPhotoUrl);
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -424,11 +488,11 @@ export default function App() {
   }, [currentLocation, gpsActive, lastImportCoords, dismissedOsmImportCoords, vehicleConfig.raio_captura_pontes]);
 
   useEffect(() => {
-    localStorage.setItem('low_bridge_sound_muted', String(isSoundMuted));
+    safeLocalStorageSetItem('low_bridge_sound_muted', String(isSoundMuted));
   }, [isSoundMuted]);
 
   useEffect(() => {
-    localStorage.setItem('low_bridge_enable_add_button', String(isAddBridgeButtonEnabled));
+    safeLocalStorageSetItem('low_bridge_enable_add_button', String(isAddBridgeButtonEnabled));
   }, [isAddBridgeButtonEnabled]);
 
   // Auto-hide toast after 3 seconds
@@ -506,29 +570,29 @@ export default function App() {
   // --- Effects ---
   // Sync filterMode to localStorage
   useEffect(() => {
-    localStorage.setItem('low_bridge_filter_mode', filterMode);
+    safeLocalStorageSetItem('low_bridge_filter_mode', filterMode);
   }, [filterMode]);
 
   // Sync GPS Active state to localStorage
   useEffect(() => {
-    localStorage.setItem('low_bridge_monitoring_active', String(gpsActive));
+    safeLocalStorageSetItem('low_bridge_monitoring_active', String(gpsActive));
   }, [gpsActive]);
 
   // Sync current GPS location to localStorage
   useEffect(() => {
     if (currentLocation) {
-      localStorage.setItem('low_bridge_last_location', JSON.stringify(currentLocation));
+      safeLocalStorageSetItem('low_bridge_last_location', JSON.stringify(currentLocation));
     }
   }, [currentLocation]);
 
   // Sync bridges to localStorage
   useEffect(() => {
-    localStorage.setItem('low_bridge_bridges', JSON.stringify(bridges));
+    safeLocalStorageSetItem('low_bridge_bridges', JSON.stringify(bridges));
   }, [bridges]);
 
   // Sync vehicle config to localStorage
   useEffect(() => {
-    localStorage.setItem('low_bridge_config', JSON.stringify(vehicleConfig));
+    safeLocalStorageSetItem('low_bridge_config', JSON.stringify(vehicleConfig));
     // If we just configured the vehicle, open first setup if needed
     if (!vehicleConfig.configurado) {
       setShowConfigModal(true);
@@ -538,7 +602,7 @@ export default function App() {
   // Sync last alert to localStorage
   useEffect(() => {
     if (lastAlert) {
-      localStorage.setItem('low_bridge_last_alert', JSON.stringify(lastAlert));
+      safeLocalStorageSetItem('low_bridge_last_alert', JSON.stringify(lastAlert));
     }
   }, [lastAlert]);
 
@@ -852,7 +916,7 @@ export default function App() {
       if (result.importedBridges.length > 0) {
         setBridges((prev) => {
           const merged = [...result.importedBridges, ...prev];
-          localStorage.setItem('low_bridge_bridges', JSON.stringify(merged));
+          safeLocalStorageSetItem('low_bridge_bridges', JSON.stringify(merged));
           return merged;
         });
         setToast({
@@ -868,7 +932,7 @@ export default function App() {
 
       // Save last imported coordinates on success to prevent repeated popups in the same region
       setLastImportCoords(targetCoords);
-      localStorage.setItem('low_bridge_last_import_coords', JSON.stringify(targetCoords));
+      safeLocalStorageSetItem('low_bridge_last_import_coords', JSON.stringify(targetCoords));
 
       setOsmImportingStatus(
         `Importação concluída para ${localizacaoTexto}! Novas pontes: ${result.importedBridges.length}. Puladas: ${result.skippedCount}. Erros: ${result.errorCount}.`
@@ -909,13 +973,13 @@ export default function App() {
       const ids = id.split(',');
       setBridges((prev) => {
         updated = prev.filter((b) => !ids.includes(b.id));
-        localStorage.setItem('low_bridge_bridges', JSON.stringify(updated));
+        safeLocalStorageSetItem('low_bridge_bridges', JSON.stringify(updated));
         return updated;
       });
     } else {
       setBridges((prev) => {
         updated = prev.filter((b) => b.id !== id);
-        localStorage.setItem('low_bridge_bridges', JSON.stringify(updated));
+        safeLocalStorageSetItem('low_bridge_bridges', JSON.stringify(updated));
         return updated;
       });
     }
@@ -953,7 +1017,7 @@ export default function App() {
 
     setBridges((prev) => {
       const updated = [brandNew, ...prev];
-      localStorage.setItem('low_bridge_bridges', JSON.stringify(updated));
+      safeLocalStorageSetItem('low_bridge_bridges', JSON.stringify(updated));
       return updated;
     });
 
