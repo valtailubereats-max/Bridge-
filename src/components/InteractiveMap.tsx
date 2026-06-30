@@ -376,13 +376,16 @@ export default function InteractiveMap({
   // 7. Clustering to avoid visual pollution on distant zoom levels
   const clusteredItems = React.useMemo(() => {
     if (zoom >= 14 || isEditingLocation) {
-      return filteredGroups.map(group => ({
-        id: group.id,
-        latitude: group.primaryBridge.latitude,
-        longitude: group.primaryBridge.longitude,
-        group,
-        isCluster: false as const,
-      }));
+      return filteredGroups.map(group => {
+        const isEditingThisBridge = isEditingLocation && editingBridge && (group.id === editingBridge.id || group.bridges.some(b => b.id === editingBridge.id));
+        return {
+          id: group.id,
+          latitude: (isEditingThisBridge && draggedCoords) ? draggedCoords.latitude : group.primaryBridge.latitude,
+          longitude: (isEditingThisBridge && draggedCoords) ? draggedCoords.longitude : group.primaryBridge.longitude,
+          group,
+          isCluster: false as const,
+        };
+      });
     }
 
     // Zoom-dependent threshold (approx degrees)
@@ -438,7 +441,7 @@ export default function InteractiveMap({
       }
       return item;
     });
-  }, [filteredGroups, zoom, isEditingLocation]);
+  }, [filteredGroups, zoom, isEditingLocation, draggedCoords, editingBridge]);
 
   // Fit bounds to show all currently filtered bridges
   const handleFitBounds = () => {
@@ -685,7 +688,9 @@ export default function InteractiveMap({
         const bridge = group.primaryBridge;
         const isEditingThisBridge = isEditingLocation && editingBridge && (group.id === editingBridge.id || group.bridges.some(b => b.id === editingBridge.id));
         const isDanger = group.altura_maxima !== null && group.altura_maxima <= vehicleHeight;
-        const bridgeLatLng: L.LatLngExpression = [bridge.latitude, bridge.longitude];
+        const bridgeLatLng: L.LatLngExpression = (isEditingThisBridge && draggedCoords)
+          ? [draggedCoords.latitude, draggedCoords.longitude]
+          : [bridge.latitude, bridge.longitude];
         
         // Calculate real distance if location is available
         const distance = currentLocation
@@ -1061,6 +1066,53 @@ export default function InteractiveMap({
             </div>
           )}
         </div>
+        )}
+
+        {isEditingLocation && editingBridge && (
+          <div className="absolute top-3 left-3 right-3 z-[1005] flex flex-col items-center pointer-events-none">
+            <div className="w-full max-w-xs bg-slate-900/95 border border-blue-500 rounded-2xl p-3 shadow-2xl flex flex-col gap-2 backdrop-blur animate-in slide-in-from-top duration-300 pointer-events-auto mt-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse shrink-0" />
+                  <h4 className="text-[10px] font-black text-slate-100 uppercase tracking-wider">Ajustar Local</h4>
+                </div>
+                {draggedCoords && (
+                  <span className="text-[9px] font-mono font-bold text-slate-400 bg-slate-950/80 px-2 py-0.5 rounded-md">
+                    Lat: {draggedCoords.latitude.toFixed(5)}, Lng: {draggedCoords.longitude.toFixed(5)}
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-300 leading-normal font-medium">
+                Arraste o pino da ponte <span className="text-blue-400 font-bold">"{editingBridge.nome || 'Sem Nome'}"</span> no mapa para a localização pretendida.
+              </p>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onCancelEditLocation) {
+                      onCancelEditLocation();
+                    }
+                  }}
+                  className="h-9 text-xs font-bold bg-slate-800 hover:bg-slate-750 active:bg-slate-850 text-slate-300 rounded-xl transition-all border border-slate-700 cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  <X className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                  <span>Cancelar</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onSaveEditLocation && draggedCoords) {
+                      onSaveEditLocation(draggedCoords.latitude, draggedCoords.longitude);
+                    }
+                  }}
+                  className="h-9 text-xs font-black bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-blue-950/20 active:scale-95"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-white shrink-0" />
+                  <span>Confirmar</span>
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Floating "Voltar a seguir" has been integrated directly into the blinking main Follow button */}
