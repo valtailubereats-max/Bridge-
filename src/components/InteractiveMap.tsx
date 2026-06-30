@@ -17,6 +17,7 @@ interface InteractiveMapProps {
   onQuickAdd?: (latitude: number, longitude: number) => void;
   onOpenFormWithCoords?: (lat: number, lng: number) => void;
   onEdit?: (bridge: Bridge) => void;
+  onEditDetails?: (bridge: Bridge) => void;
   onDelete?: (id: string) => void;
   temporaryBridgeCoords?: Coordinates | null;
   onChangeTemporaryCoords?: (coords: Coordinates | null) => void;
@@ -50,6 +51,7 @@ export default function InteractiveMap({
   onQuickAdd,
   onOpenFormWithCoords,
   onEdit,
+  onEditDetails,
   onDelete,
   temporaryBridgeCoords,
   onChangeTemporaryCoords,
@@ -1410,20 +1412,36 @@ export default function InteractiveMap({
                   <span>Ver Rota no Google Maps</span>
                 </a>
 
-                <div className="grid grid-cols-2 gap-2">
-                  {onEdit && (
-                    <button
-                      onClick={() => {
-                        onEdit(activeConsultationGroup.primaryBridge);
-                        setActiveConsultationGroupId(null);
-                      }}
-                      className="h-9.5 bg-slate-900 hover:bg-slate-850 active:bg-slate-950 text-slate-300 hover:text-white font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 transition-all border border-slate-800 cursor-pointer active:scale-95"
-                      id="btn-consultation-edit"
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                      <span>Editar</span>
-                    </button>
-                  )}
+                <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    {onEdit && (
+                      <button
+                        onClick={() => {
+                          onEdit(activeConsultationGroup.primaryBridge);
+                          setActiveConsultationGroupId(null);
+                        }}
+                        className="h-9.5 bg-slate-900 hover:bg-slate-850 active:bg-slate-950 text-slate-300 hover:text-white font-bold text-[10px] rounded-xl flex items-center justify-center gap-1 transition-all border border-slate-800 cursor-pointer active:scale-95"
+                        id="btn-consultation-edit"
+                      >
+                        <MapPin className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                        <span>Mover Pino</span>
+                      </button>
+                    )}
+
+                    {onEditDetails && (
+                      <button
+                        onClick={() => {
+                          onEditDetails(activeConsultationGroup.primaryBridge);
+                          setActiveConsultationGroupId(null);
+                        }}
+                        className="h-9.5 bg-slate-900 hover:bg-slate-850 active:bg-slate-950 text-slate-300 hover:text-white font-bold text-[10px] rounded-xl flex items-center justify-center gap-1 transition-all border border-slate-800 cursor-pointer active:scale-95"
+                        id="btn-consultation-edit-details"
+                      >
+                        <Edit className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <span>Editar Dados</span>
+                      </button>
+                    )}
+                  </div>
 
                   {onDelete && (
                     <button
@@ -1433,11 +1451,11 @@ export default function InteractiveMap({
                           setActiveConsultationGroupId(null);
                         }
                       }}
-                      className="h-9.5 bg-red-950/30 hover:bg-red-900/40 active:bg-red-950/50 border border-red-500/15 text-red-400 hover:text-red-300 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                      className="h-9.5 w-full bg-red-950/30 hover:bg-red-900/40 active:bg-red-950/50 border border-red-500/15 text-red-400 hover:text-red-300 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
                       id="btn-consultation-delete"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>Excluir</span>
+                      <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                      <span>Excluir Ponte</span>
                     </button>
                   )}
                 </div>

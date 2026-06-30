@@ -864,15 +864,21 @@ export default function App() {
   // --- Location Correction Handlers ---
   const handleSaveEditLocation = (lat: number, lng: number) => {
     if (editingBridge) {
-      setEditingBridge({
-        ...editingBridge,
-        latitude: lat,
-        longitude: lng
-      });
+      setBridges((prev) =>
+        prev.map((b) =>
+          b.id === editingBridge.id
+            ? {
+                ...b,
+                latitude: lat,
+                longitude: lng
+              }
+            : b
+        )
+      );
+      setToast({ message: 'Posição ajustada e guardada com sucesso!', type: 'success' });
     }
     setIsEditingLocation(false);
-    setShowAddBridgeForm(true);
-    setToast({ message: 'Posição ajustada com sucesso! Conclua os outros dados.', type: 'success' });
+    setEditingBridge(null);
   };
 
   const handleCancelEditLocation = () => {
@@ -1279,6 +1285,10 @@ export default function App() {
               onEdit={(bridge) => {
                 setEditingBridge(bridge);
                 setIsEditingLocation(true);
+              }}
+              onEditDetails={(bridge) => {
+                setEditingBridge(bridge);
+                setShowAddBridgeForm(true);
               }}
               onDelete={handleDeleteBridge}
               temporaryBridgeCoords={quickAddCoords}
