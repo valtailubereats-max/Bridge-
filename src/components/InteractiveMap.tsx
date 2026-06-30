@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Bridge, Coordinates, ConfidenceStatus } from '../types';
 import { getDistance, formatDistance, getGoogleMapsDirectionUrl } from '../utils/geo';
 import { getGroupedBridges, getConfidenceStatusLabel, BridgeGroup } from '../utils/bridgeGroup';
-import { Navigation, Compass, Map, Filter, ZoomIn, CheckCircle2, Plus, X, Radio, Camera, Image as ImageIcon, Edit, Trash2 } from 'lucide-react';
+import { Navigation, Compass, Map, Filter, ZoomIn, CheckCircle2, Plus, X, Radio, Camera, Image as ImageIcon, Edit, Trash2, MapPin } from 'lucide-react';
 
 interface InteractiveMapProps {
   bridges: Bridge[];
@@ -33,6 +33,10 @@ interface InteractiveMapProps {
   onUseCurrentLocation?: () => void;
   onTriggerCamera?: () => void;
   onStartCaptureMode?: () => void;
+  editingBridge?: Bridge | null;
+  isEditingLocation?: boolean;
+  onSaveEditLocation?: (lat: number, lng: number) => void;
+  onCancelEditLocation?: () => void;
 }
 
 export default function InteractiveMap({
@@ -62,6 +66,10 @@ export default function InteractiveMap({
   onUseCurrentLocation,
   onTriggerCamera,
   onStartCaptureMode,
+  editingBridge = null,
+  isEditingLocation = false,
+  onSaveEditLocation,
+  onCancelEditLocation,
 }: InteractiveMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -85,6 +93,18 @@ export default function InteractiveMap({
   const [activeConsultationGroupId, setActiveConsultationGroupId] = useState<string | null>(null);
   const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
   const [photoZoom, setPhotoZoom] = useState(1);
+  const [draggedCoords, setDraggedCoords] = useState<Coordinates | null>(null);
+
+  useEffect(() => {
+    if (isEditingLocation && editingBridge) {
+      setDraggedCoords({
+        latitude: editingBridge.latitude,
+        longitude: editingBridge.longitude,
+      });
+    } else {
+      setDraggedCoords(null);
+    }
+  }, [isEditingLocation, editingBridge]);
 
   const setActiveConsultationGroupIdRef = useRef(setActiveConsultationGroupId);
   useEffect(() => {
@@ -355,7 +375,7 @@ export default function InteractiveMap({
 
   // 7. Clustering to avoid visual pollution on distant zoom levels
   const clusteredItems = React.useMemo(() => {
-    if (zoom >= 14) {
+    if (zoom >= 14 || isEditingLocation) {
       return filteredGroups.map(group => ({
         id: group.id,
         latitude: group.primaryBridge.latitude,
@@ -418,7 +438,7 @@ export default function InteractiveMap({
       }
       return item;
     });
-  }, [filteredGroups, zoom]);
+  }, [filteredGroups, zoom, isEditingLocation]);
 
   // Fit bounds to show all currently filtered bridges
   const handleFitBounds = () => {
@@ -663,6 +683,7 @@ export default function InteractiveMap({
         // Render individual bridge marker
         const group = item.group!;
         const bridge = group.primaryBridge;
+        const isEditingThisBridge = isEditingLocation && editingBridge && (group.id === editingBridge.id || group.bridges.some(b => b.id === editingBridge.id));
         const isDanger = group.altura_maxima !== null && group.altura_maxima <= vehicleHeight;
         const bridgeLatLng: L.LatLngExpression = [bridge.latitude, bridge.longitude];
         
@@ -719,11 +740,27 @@ export default function InteractiveMap({
 
         if (!bridgeMarkersRef.current[item.id]) {
           // Create new marker
-          const marker = L.marker(bridgeLatLng, { icon: bridgeIcon }).addTo(map);
+          const markerOptions: L.MarkerOptions = { icon: bridgeIcon };
+          if (isEditingThisBridge) {
+            markerOptions.draggable = true;
+          }
+          const marker = L.marker(bridgeLatLng, markerOptions).addTo(map);
           marker.on('click', () => {
-            setActiveConsultationGroupIdRef.current(group.id);
-            map.closePopup();
+            if (!isEditingThisBridge) {
+              setActiveConsultationGroupIdRef.current(group.id);
+              map.closePopup();
+            }
           });
+
+          if (isEditingThisBridge) {
+            marker.on('dragend', (e: any) => {
+              const latLng = e.target.getLatLng();
+              setDraggedCoords({
+                latitude: latLng.lat,
+                longitude: latLng.lng,
+              });
+            });
+          }
 
           // Create alert circle matching the configured radius if it is a dangerous bridge
           let circle: L.Circle | undefined = undefined;
@@ -747,9 +784,26 @@ export default function InteractiveMap({
           
           existing.marker.off('click');
           existing.marker.on('click', () => {
-            setActiveConsultationGroupIdRef.current(group.id);
-            map.closePopup();
+            if (!isEditingThisBridge) {
+              setActiveConsultationGroupIdRef.current(group.id);
+              map.closePopup();
+            }
           });
+
+          if (isEditingThisBridge) {
+            existing.marker.dragging?.enable();
+            existing.marker.off('dragend');
+            existing.marker.on('dragend', (e: any) => {
+              const latLng = e.target.getLatLng();
+              setDraggedCoords({
+                latitude: latLng.lat,
+                longitude: latLng.lng,
+              });
+            });
+          } else {
+            existing.marker.dragging?.disable();
+            existing.marker.off('dragend');
+          }
 
           // Update circle radius or add if missing
           if (isDanger) {
@@ -813,24 +867,9 @@ export default function InteractiveMap({
         <div ref={mapContainerRef} className="w-full h-full" id="live-navigation-map" />
 
         {/* Floating Quick Add Controls */}
-        <div className="absolute top-3 left-3 right-3 z-[1005] flex flex-col gap-2 pointer-events-none">
-          <div className="flex items-center justify-between gap-2">
-            {/* Fit Bounds ("Ver Todas") is now a floating button inside the map, taking no extra container space */}
-            {filteredGroups.length > 0 ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleFitBounds();
-                }}
-                className="px-2.5 py-1.5 bg-slate-900/90 border border-slate-800 hover:bg-slate-750 text-slate-300 text-[10px] font-black rounded-lg flex items-center gap-1 transition-all cursor-pointer pointer-events-auto shadow-2xl active:scale-95"
-                id="btn-fit-map"
-                title="Ajustar o mapa para ver todas as pontes filtradas"
-              >
-                <ZoomIn className="h-3.5 w-3.5 text-blue-400" />
-                <span>Ver Todas</span>
-              </button>
-            ) : <div />}
-
+        {!isEditingLocation && (
+          <div className="absolute top-3 left-3 right-3 z-[1005] flex flex-col gap-2 pointer-events-none">
+          <div className="flex items-center justify-end gap-2">
             <div className="flex items-center gap-2 pointer-events-auto">
               {/* Add Bridge Button inside the map, placed in the top right */}
               <button
@@ -1022,19 +1061,22 @@ export default function InteractiveMap({
             </div>
           )}
         </div>
+        )}
 
         {/* Floating "Voltar a seguir" has been integrated directly into the blinking main Follow button */}
 
         {/* Helper overlay when GPS is off (compact visual bar, placed higher to not overlap with bottom floating buttons) */}
-        {!gpsActive && (
-          <div className="absolute bottom-20 right-3 left-3 bg-slate-950/90 border border-slate-800 rounded-xl p-2 z-[1005] flex items-center gap-2.5 backdrop-blur shadow-xl">
-            <Map className="h-4.5 w-4.5 text-blue-400 shrink-0 animate-pulse" />
-            <div className="flex-1 text-left">
-              <p className="text-[9px] font-extrabold text-slate-200 leading-none">GPS Inativo</p>
-              <p className="text-[8px] text-slate-400 mt-0.5">Ative a monitorização para ver o seu veículo no mapa em tempo real.</p>
-            </div>
-          </div>
-        )}
+        {!isEditingLocation && (
+          <>
+            {!gpsActive && (
+              <div className="absolute bottom-20 right-3 left-3 bg-slate-950/90 border border-slate-800 rounded-xl p-2 z-[1005] flex items-center gap-2.5 backdrop-blur shadow-xl">
+                <Map className="h-4.5 w-4.5 text-blue-400 shrink-0 animate-pulse" />
+                <div className="flex-1 text-left">
+                  <p className="text-[9px] font-extrabold text-slate-200 leading-none">GPS Inativo</p>
+                  <p className="text-[8px] text-slate-400 mt-0.5">Ative a monitorização para ver o seu veículo no mapa em tempo real.</p>
+                </div>
+              </div>
+            )}
 
         {/* Floating Filter Dropdown Button on the bottom-left side of the map */}
         <div className="absolute left-3 bottom-3 z-[1005] pointer-events-none">
@@ -1166,10 +1208,12 @@ export default function InteractiveMap({
             </button>
           )}
         </div>
+          </>
+        )}
 
         {/* Active Consultation Complete Draggable Card (Situation 1) */}
         <AnimatePresence>
-          {activeConsultationGroup && (
+          {activeConsultationGroup && !isEditingLocation && (
             <motion.div
               drag
               dragMomentum={false}

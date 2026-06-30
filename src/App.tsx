@@ -238,6 +238,7 @@ export default function App() {
   const [showAddBridgeForm, setShowAddBridgeForm] = useState(false);
   const [showBridgesList, setShowBridgesList] = useState(false);
   const [editingBridge, setEditingBridge] = useState<Bridge | null>(null);
+  const [isEditingLocation, setIsEditingLocation] = useState<boolean>(false);
   const [mapPrefilledCoords, setMapPrefilledCoords] = useState<Coordinates | null>(null);
 
   // --- Filter Management ---
@@ -541,12 +542,17 @@ export default function App() {
 
   // --- Safety Refs to Prevent Stale Closures inside Geolocation callbacks ---
   const cooldownsRef = useRef(cooldowns);
+  const minAlertDistanceRef = useRef<number | null>(null);
   const bridgesRef = useRef(bridges);
   const vehicleConfigRef = useRef(vehicleConfig);
   const quickAddCoordsRef = useRef(quickAddCoords);
   const gpsActiveRef = useRef(gpsActive);
+  const activeAlertRef = useRef(activeAlert);
 
   // Keep safety references synchronized with state updates
+  useEffect(() => {
+    activeAlertRef.current = activeAlert;
+  }, [activeAlert]);
   useEffect(() => {
     cooldownsRef.current = cooldowns;
   }, [cooldowns]);
@@ -677,6 +683,33 @@ export default function App() {
     triggeredAlert = bestAlert;
 
     if (triggeredAlert) {
+      // Check if we have passed or are passing the bridge
+      const currentActiveAlert = activeAlertRef.current;
+      if (currentActiveAlert && currentActiveAlert.bridge.id === triggeredAlert.bridge.id) {
+        // Track the minimum distance observed during the current active alert
+        if (minAlertDistanceRef.current === null || triggeredAlert.distancia < minAlertDistanceRef.current) {
+          minAlertDistanceRef.current = triggeredAlert.distancia;
+        } else if (minAlertDistanceRef.current < 40 && triggeredAlert.distancia > minAlertDistanceRef.current + 15) {
+          // Passed the bridge! We got closer than 40m, and now we are at least 15m further away.
+          // Auto-dismiss the alert and stop the alarm
+          setActiveAlert(null);
+          minAlertDistanceRef.current = null;
+          stopAlarm();
+          return;
+        }
+      } else {
+        // Reset min distance tracking for the new alert
+        minAlertDistanceRef.current = triggeredAlert.distancia;
+      }
+
+      // If we are directly under/at the bridge (less than 15 meters)
+      if (triggeredAlert.distancia < 15) {
+        setActiveAlert(null);
+        minAlertDistanceRef.current = null;
+        stopAlarm();
+        return;
+      }
+
       setActiveAlert(triggeredAlert);
       setLastAlert({
         bridgeName: triggeredAlert.bridge.nome,
@@ -687,6 +720,7 @@ export default function App() {
     } else {
       // Clear alert if we walked out of danger zone
       setActiveAlert(null);
+      minAlertDistanceRef.current = null;
     }
   };
 
@@ -825,6 +859,26 @@ export default function App() {
     }
     setActiveAlert(null);
     stopAlarm();
+  };
+
+  // --- Location Correction Handlers ---
+  const handleSaveEditLocation = (lat: number, lng: number) => {
+    if (editingBridge) {
+      setEditingBridge({
+        ...editingBridge,
+        latitude: lat,
+        longitude: lng
+      });
+    }
+    setIsEditingLocation(false);
+    setShowAddBridgeForm(true);
+    setToast({ message: 'Posição ajustada com sucesso! Conclua os outros dados.', type: 'success' });
+  };
+
+  const handleCancelEditLocation = () => {
+    setIsEditingLocation(false);
+    setEditingBridge(null);
+    setToast({ message: 'Ajuste de posição cancelado.', type: 'info' });
   };
 
   // --- Bridge CRUD Actions ---
@@ -1224,7 +1278,7 @@ export default function App() {
               onOpenFormWithCoords={handleOpenFormWithCoords}
               onEdit={(bridge) => {
                 setEditingBridge(bridge);
-                setShowAddBridgeForm(true);
+                setIsEditingLocation(true);
               }}
               onDelete={handleDeleteBridge}
               temporaryBridgeCoords={quickAddCoords}
@@ -1242,6 +1296,10 @@ export default function App() {
               onUseCurrentLocation={handleUseCurrentLocation}
               onTriggerCamera={handleTriggerCamera}
               onStartCaptureMode={handleStartCaptureMode}
+              editingBridge={editingBridge}
+              isEditingLocation={isEditingLocation}
+              onSaveEditLocation={handleSaveEditLocation}
+              onCancelEditLocation={handleCancelEditLocation}
             />
 
             {/* Quick add handled instantly */}
