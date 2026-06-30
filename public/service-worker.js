@@ -59,10 +59,105 @@ function getOfflineHTMLResponse() {
   );
 }
 
+// Helper for IndexedDB database of map tile metadata
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('map-tiles-metadata', 1);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('tiles')) {
+        db.createObjectStore('tiles', { keyPath: 'url' });
+      }
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+}
+
+async function recordTileAccessInSW(url) {
+  try {
+    const db = await openDB();
+    const tx = db.transaction('tiles', 'readwrite');
+    const store = tx.objectStore('tiles');
+    store.put({ url, lastUsed: Date.now() });
+    
+    tx.oncomplete = () => {
+      cleanOldTilesIfNeeded();
+    };
+  } catch (err) {
+    // Ignore db errors in SW
+  }
+}
+
+async function cleanOldTilesIfNeeded() {
+  try {
+    const db = await openDB();
+    const tx = db.transaction('tiles', 'readonly');
+    const store = tx.objectStore('tiles');
+    const request = store.getAll();
+    request.onsuccess = async (e) => {
+      const all = e.target.result;
+      const LIMIT = 2000; // Limit of tiles to keep
+      if (all.length > LIMIT) {
+        all.sort((a, b) => a.lastUsed - b.lastUsed);
+        const toDeleteCount = all.length - LIMIT;
+        const toDelete = all.slice(0, toDeleteCount);
+        
+        const cache = await caches.open('map-tiles-v1');
+        const writeTx = db.transaction('tiles', 'readwrite');
+        const writeStore = writeTx.objectStore('tiles');
+        
+        for (const item of toDelete) {
+          try {
+            await cache.delete(item.url);
+            writeStore.delete(item.url);
+          } catch (err) {}
+        }
+        console.log(`[Service Worker] Pruned ${toDeleteCount} old tiles to stay under limit of ${LIMIT}`);
+      }
+    };
+  } catch (err) {
+    // Ignore cleanup errors
+  }
+}
+
 // Fetch Event
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests and local assets
-  if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  const isTileUrl = event.request.url.includes('tile.openstreetmap.org');
+  const isLocalAsset = event.request.url.startsWith(self.location.origin);
+
+  if (!isLocalAsset && !isTileUrl) {
+    return;
+  }
+
+  // Handle OSM Map Tiles (Third-party)
+  if (isTileUrl) {
+    const normUrl = event.request.url.replace(/(a|b|c)\.tile\.openstreetmap\.org/, 'a.tile.openstreetmap.org');
+    event.respondWith(
+      caches.open('map-tiles-v1').then((cache) => {
+        return cache.match(normUrl).then((cachedResponse) => {
+          if (cachedResponse) {
+            // Record tile access in background and optionally refresh
+            recordTileAccessInSW(normUrl);
+            return cachedResponse;
+          }
+
+          return fetch(event.request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put(normUrl, networkResponse.clone());
+              recordTileAccessInSW(normUrl);
+            }
+            return networkResponse;
+          }).catch((error) => {
+            throw error;
+          });
+        });
+      })
+    );
     return;
   }
 

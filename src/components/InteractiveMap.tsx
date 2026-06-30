@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Bridge, Coordinates, ConfidenceStatus } from '../types';
 import { getDistance, formatDistance, getGoogleMapsDirectionUrl } from '../utils/geo';
 import { getGroupedBridges, getConfidenceStatusLabel, BridgeGroup } from '../utils/bridgeGroup';
-import { Navigation, Compass, Map, Filter, ZoomIn, CheckCircle2, Plus, X, Radio, Camera, Image as ImageIcon, Edit, Trash2, MapPin } from 'lucide-react';
+import { Navigation, Compass, Map, Filter, ZoomIn, CheckCircle2, Plus, X, Radio, Camera, Image as ImageIcon, Edit, Trash2, MapPin, WifiOff } from 'lucide-react';
 
 interface InteractiveMapProps {
   bridges: Bridge[];
@@ -96,6 +96,43 @@ export default function InteractiveMap({
   const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
   const [photoZoom, setPhotoZoom] = useState(1);
   const [draggedCoords, setDraggedCoords] = useState<Coordinates | null>(null);
+
+  // Offline Map Caching States
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [mapCenterState, setMapCenterState] = useState<Coordinates | null>(null);
+  const [visitedCenters, setVisitedCenters] = useState<Coordinates[]>(() => {
+    const saved = localStorage.getItem('low_bridge_visited_centers');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+  const [savedOfflineArea, setSavedOfflineArea] = useState<{ latitude: number; longitude: number; radiusMeters: number; timestamp: number } | null>(() => {
+    const saved = localStorage.getItem('low_bridge_offline_area');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (isEditingLocation && editingBridge) {
@@ -233,6 +270,28 @@ export default function InteractiveMap({
     setZoom(map.getZoom());
     map.on('zoomend', () => {
       setZoom(map.getZoom());
+    });
+
+    // Detect map move events to update the center state (useful for offline status checking)
+    setMapCenterState({ latitude: map.getCenter().lat, longitude: map.getCenter().lng });
+    map.on('moveend', () => {
+      const center = map.getCenter();
+      const coords = { latitude: center.lat, longitude: center.lng };
+      setMapCenterState(coords);
+
+      // If online, record this center as viewed so we know we have loaded tiles in cache for this region
+      if (navigator.onLine) {
+        setVisitedCenters((prev) => {
+          // Check if this center is already close to an existing saved center (within 10 km)
+          const isClose = prev.some(
+            (c) => getDistance(coords.latitude, coords.longitude, c.latitude, c.longitude) < 10000
+          );
+          if (isClose) return prev;
+          const next = [coords, ...prev].slice(0, 50); // Keep last 50 viewed areas
+          localStorage.setItem('low_bridge_visited_centers', JSON.stringify(next));
+          return next;
+        });
+      }
     });
 
     // Use robust event delegation on the map container to handle click events on popup buttons.
@@ -860,6 +919,57 @@ export default function InteractiveMap({
     }
   };
 
+  // IndexedDB tile accessor to log downloads
+  const recordTileAccess = (url: string): Promise<void> => {
+    return new Promise((resolve) => {
+      try {
+        const request = indexedDB.open('map-tiles-metadata', 1);
+        request.onupgradeneeded = (e: any) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('tiles')) {
+            db.createObjectStore('tiles', { keyPath: 'url' });
+          }
+        };
+        request.onsuccess = (e: any) => {
+          const db = e.target.result;
+          try {
+            const tx = db.transaction('tiles', 'readwrite');
+            const store = tx.objectStore('tiles');
+            store.put({ url, lastUsed: Date.now() });
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onerror = () => {
+              db.close();
+              resolve();
+            };
+          } catch {
+            db.close();
+            resolve();
+          }
+        };
+        request.onerror = () => {
+          resolve();
+        };
+      } catch {
+        resolve();
+      }
+    });
+  };
+
+  // Trigger download of standard offline area
+  // NOTE: Bulk pre-downloading is disabled when using the public tile.openstreetmap.org servers
+  // to fully respect their official Tile Usage Policy (https://operations.osmfoundation.org/policies/tiles/).
+  // For production systems requiring full pre-downloading offline areas, this logic can be re-enabled
+  // when switched to:
+  // - A private tile server (e.g., self-hosted Mapnik/Renderd)
+  // - A commercial paid/permissive tile provider allowing offline usage (e.g., Mapbox, MapTiler)
+  // - Offline vector map packages (e.g., MapLibre GL with offline MBTiles databases)
+  const handleSaveOfflineArea = async () => {
+    console.warn('Bulk downloading map tiles is disabled on public OpenStreetMap servers to respect their Tile Usage Policy.');
+  };
+
   const countNearby = groupedBridges.filter(g => {
     const refLat = currentLocation ? currentLocation.latitude : defaultCenter[0];
     const refLng = currentLocation ? currentLocation.longitude : defaultCenter[1];
@@ -909,6 +1019,39 @@ export default function InteractiveMap({
               )}
             </div>
           </div>
+
+          {/* Offline Out of Bounds Warning */}
+          {(() => {
+            const isOutside = !isOnline && (() => {
+              if (!mapCenterState) return false;
+              
+              // If the user viewed this area while they were online, they will have the tiles cached automatically.
+              const isNearVisited = visitedCenters.some(
+                (c) => getDistance(mapCenterState.latitude, mapCenterState.longitude, c.latitude, c.longitude) < 16093 // within 10 miles
+              );
+              if (isNearVisited) return false;
+
+              // Retain backward compatibility with any previously downloaded offline area
+              if (savedOfflineArea && getDistance(mapCenterState.latitude, mapCenterState.longitude, savedOfflineArea.latitude, savedOfflineArea.longitude) <= savedOfflineArea.radiusMeters) {
+                return false;
+              }
+
+              return true;
+            })();
+
+            if (isOutside) {
+              return (
+                <div className="self-center w-full max-w-xs bg-red-950/95 border border-red-850/40 rounded-2xl p-3 shadow-2xl flex items-center gap-2.5 backdrop-blur animate-in slide-in-from-top duration-300 pointer-events-auto mt-2">
+                  <WifiOff className="h-4.5 w-4.5 text-red-400 shrink-0 animate-pulse" />
+                  <div className="flex-1 text-left">
+                    <p className="text-[10px] font-black text-red-200 leading-none uppercase tracking-wider">Modo Offline</p>
+                    <p className="text-[9px] text-red-300/90 mt-1 leading-normal font-medium">Esta área ainda não está disponível offline.</p>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
 
           {/* Draggable Pending Pin Adjustment Card */}
           {temporaryBridgeCoords && (
