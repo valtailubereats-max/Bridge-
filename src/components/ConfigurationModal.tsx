@@ -26,7 +26,7 @@ export default function ConfigurationModal({
     return parseFloat(Math.max(0, val).toFixed(2)).toString();
   });
   const [apelido, setApelido] = useState<string>(currentConfig.apelido_veiculo || '');
-  const [raio, setRaio] = useState<150 | 300 | 500 | 800>(currentConfig.raio_alerta || 300);
+  const [raio, setRaio] = useState<150 | 200 | 300 | 500 | 800>(currentConfig.raio_alerta || 300);
   const [raioCaptura, setRaioCaptura] = useState<number>(currentConfig.raio_captura_pontes || 100);
   const [error, setError] = useState<string>('');
 
@@ -154,8 +154,8 @@ export default function ConfigurationModal({
               <Bell className="h-4 w-4 text-slate-400" />
               Raio de Alerta Padrão
             </label>
-            <div className="grid grid-cols-4 gap-2">
-              {([150, 300, 500, 800] as const).map((r) => (
+            <div className="grid grid-cols-5 gap-1.5">
+              {([150, 200, 300, 500, 800] as const).map((r) => (
                 <button
                   key={r}
                   type="button"
