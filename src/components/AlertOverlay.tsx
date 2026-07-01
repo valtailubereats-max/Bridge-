@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Bridge } from '../types';
 import { formatDistance } from '../utils/geo';
-import { playAlarm, stopAlarm, triggerVibration } from '../utils/audio';
 import { AlertTriangle, X, Maximize2, VolumeX } from 'lucide-react';
 
 interface AlertOverlayProps {
@@ -22,33 +21,6 @@ export default function AlertOverlay({
   isMuted = false,
 }: AlertOverlayProps) {
   const [isPhotoExpanded, setIsPhotoExpanded] = useState(false);
-
-  // Auto trigger alarm and vibration on mount, stop on unmount
-  useEffect(() => {
-    playAlarm(distancia, 0, alertType, isMuted);
-    
-    // Only vibrate for danger
-    if (alertType === 'danger') {
-      triggerVibration();
-    }
-    
-    // Auto-vibrate every 3 seconds while open (only for danger alerts)
-    const vibrateInterval = setInterval(() => {
-      if (alertType === 'danger') {
-        triggerVibration();
-      }
-    }, 3000);
-
-    return () => {
-      stopAlarm();
-      clearInterval(vibrateInterval);
-    };
-  }, [bridge.id, alertType, isMuted]);
-
-  // Dynamically update beeping frequency and level as distance decreases in real-time
-  useEffect(() => {
-    playAlarm(distancia, 0, alertType, isMuted);
-  }, [distancia, alertType, isMuted]);
 
   const isDanger = alertType === 'danger';
   const hasPhoto = !!bridge.photoDataUrl;

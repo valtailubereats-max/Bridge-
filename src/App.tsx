@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bridge, VehicleConfig, AlertState, Coordinates } from './types';
 import { INITIAL_BRIDGES } from './data/mockBridges';
 import { getDistance, formatDistance, getDepotCoords } from './utils/geo';
-import { initAudio, stopAlarm } from './utils/audio';
+import { initAudio, stopAlarm, playAlarm, triggerVibration } from './utils/audio';
 import { getGroupedBridges } from './utils/bridgeGroup';
 
 // Safe localStorage setter to avoid crashes (QuotaExceededError, etc.)
@@ -626,7 +626,7 @@ export default function App() {
     const now = Date.now();
     let triggeredAlert: AlertState | null = null;
 
-    const currentBridges = visibleBridgesRef.current;
+    const currentBridges = bridgesRef.current;
     const vHeight = vehicleConfigRef.current.altura_veiculo;
     const vRadius = vehicleConfigRef.current.raio_alerta;
 
@@ -641,8 +641,8 @@ export default function App() {
 
       // 2. Check if within alert radius
       if (distance <= vRadius) {
-        // 3. Check risk level: 'danger' if bridge height <= vehicle height OR height is pending/null
-        const isDangerous = group.altura_maxima === null || group.altura_maxima <= vHeight;
+        // 3. Check risk level: 'danger' if bridge height <= vehicle height OR height is pending/null/incomplete
+        const isDangerous = group.altura_maxima === null || group.altura_maxima === undefined || isNaN(group.altura_maxima) || group.altura_maxima <= vHeight;
         const alertType: 'danger' | 'attention' = isDangerous ? 'danger' : 'attention';
 
         // 4. Check Cooldowns (5 minutes / 300,000ms per bridge location ID)
@@ -847,6 +847,50 @@ export default function App() {
       stopAlarm();
     }
   }, [gpsActive, vehicleConfig.configurado]);
+
+  // --- Global Alarm Sound & Vibration Lifecycle Orchestrator (fixes background play issues) ---
+  useEffect(() => {
+    if (activeAlert) {
+      // Start or update alarm
+      playAlarm(
+        activeAlert.distancia,
+        0,
+        activeAlert.alertType || 'danger',
+        isSoundMuted
+      );
+
+      // Trigger initial vibration only for danger alerts
+      if (activeAlert.alertType === 'danger') {
+        triggerVibration();
+      }
+
+      // Automatically repeat vibration pulse every 3 seconds for active danger alerts
+      const vibrateInterval = setInterval(() => {
+        if (activeAlert.alertType === 'danger') {
+          triggerVibration();
+        }
+      }, 3000);
+
+      return () => {
+        stopAlarm();
+        clearInterval(vibrateInterval);
+      };
+    } else {
+      stopAlarm();
+    }
+  }, [activeAlert?.bridge.id, activeAlert?.alertType, isSoundMuted]);
+
+  // Real-time dynamic alarm sweep parameters updates when distance changes
+  useEffect(() => {
+    if (activeAlert) {
+      playAlarm(
+        activeAlert.distancia,
+        0,
+        activeAlert.alertType || 'danger',
+        isSoundMuted
+      );
+    }
+  }, [activeAlert?.distancia, activeAlert?.alertType, isSoundMuted]);
 
   // --- Alert Dismissal ---
   const handleDismissAlert = () => {
@@ -1115,7 +1159,7 @@ export default function App() {
     let minDistance = Infinity;
 
     if (currentLocation) {
-      visibleBridges.forEach((b) => {
+      bridges.forEach((b) => {
         const dist = getDistance(currentLocation.latitude, currentLocation.longitude, b.latitude, b.longitude);
         if (dist < minDistance) {
           minDistance = dist;
@@ -1126,7 +1170,7 @@ export default function App() {
 
     if (nearestBridge && minDistance <= vehicleConfig.raio_alerta) {
       const nearestBridgeObj = nearestBridge as Bridge;
-      const isDanger = nearestBridgeObj.altura_maxima === null || nearestBridgeObj.altura_maxima <= vehicleConfig.altura_veiculo;
+      const isDanger = nearestBridgeObj.altura_maxima === null || nearestBridgeObj.altura_maxima === undefined || isNaN(nearestBridgeObj.altura_maxima) || nearestBridgeObj.altura_maxima <= vehicleConfig.altura_veiculo;
       if (isDanger) {
         const heightDesc = nearestBridgeObj.altura_maxima !== null ? `${nearestBridgeObj.altura_maxima}m` : 'Altura não verificada';
         return {
