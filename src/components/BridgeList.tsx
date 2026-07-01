@@ -12,6 +12,7 @@ interface BridgeListProps {
   filterMode: 'all' | 'restricted' | 'nearby';
   setFilterMode: (mode: 'all' | 'restricted' | 'nearby') => void;
   onEdit: (bridge: Bridge) => void;
+  onEditLocation?: (bridge: Bridge) => void;
   onDelete: (id: string) => void;
   onConfirm: (id: string, confirmed: boolean) => void;
   onClose: () => void;
@@ -25,6 +26,7 @@ export default function BridgeList({
   filterMode,
   setFilterMode,
   onEdit,
+  onEditLocation,
   onDelete,
   onConfirm,
   onClose,
@@ -396,13 +398,28 @@ export default function BridgeList({
                                 <span>{subBridge.confirmada ? 'Desconfirmar' : 'Confirmar'}</span>
                               </button>
 
+                              {onEditLocation && (
+                                <button
+                                  onClick={() => {
+                                    onEditLocation(subBridge);
+                                    onClose();
+                                  }}
+                                  className="px-2 py-1 bg-slate-800 hover:bg-slate-750 border border-slate-750 rounded text-[9px] font-bold text-slate-300 flex items-center gap-1 cursor-pointer"
+                                  id={`btn-sub-edit-location-${subBridge.id}`}
+                                  title="Corrigir a localização da ponte movendo o pino no mapa"
+                                >
+                                  <MapPin className="h-3 w-3 text-blue-400" />
+                                  <span>Mover Pino</span>
+                                </button>
+                              )}
+
                               <button
                                 onClick={() => onEdit(subBridge)}
                                 className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-750 rounded text-[9px] font-bold text-slate-300 flex items-center gap-1 cursor-pointer"
                                 id={`btn-sub-edit-${subBridge.id}`}
                               >
                                 <Edit3 className="h-3 w-3 text-amber-500" />
-                                <span>Editar</span>
+                                <span>Editar Dados</span>
                               </button>
 
                               {subBridge.origem === 'motorista' && (

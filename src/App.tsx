@@ -1652,6 +1652,11 @@ export default function App() {
             setEditingBridge(bridge);
             setShowAddBridgeForm(true);
           }}
+          onEditLocation={(bridge) => {
+            setEditingBridge(bridge);
+            setIsEditingLocation(true);
+            setShowBridgesList(false);
+          }}
           onDelete={handleDeleteBridge}
           onConfirm={handleToggleConfirmBridge}
           onClose={() => setShowBridgesList(false)}

@@ -1253,7 +1253,7 @@ export default function InteractiveMap({
                   className="h-9 text-xs font-black bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-blue-950/20 active:scale-95"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 text-white shrink-0" />
-                  <span>Confirmar</span>
+                  <span>Confirmar Localização</span>
                 </button>
               </div>
             </div>
