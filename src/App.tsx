@@ -203,13 +203,15 @@ export default function App() {
       }
 
       // 2. Filter by Minimum Bridge Height (if configured)
-      if (minBridgeHeight > 0 && b.altura_maxima !== null && b.altura_maxima < minBridgeHeight) {
+      // Safety rule: NEVER filter out dangerous or pending/incomplete bridges (height <= vehicleHeight or null)
+      const isDangerous = b.altura_maxima === null || b.altura_maxima <= vehicleConfig.altura_veiculo;
+      if (!isDangerous && minBridgeHeight > 0 && b.altura_maxima !== null && b.altura_maxima < minBridgeHeight) {
         return false;
       }
 
       return true;
     });
-  }, [bridges, currentLocation, vehicleConfig.raio_captura_pontes, vehicleConfig.altura_minima_ponte]);
+  }, [bridges, currentLocation, vehicleConfig.raio_captura_pontes, vehicleConfig.altura_minima_ponte, vehicleConfig.altura_veiculo]);
 
   const visibleBridgesRef = useRef(visibleBridges);
   useEffect(() => {
@@ -549,6 +551,47 @@ export default function App() {
   const gpsActiveRef = useRef(gpsActive);
   const activeAlertRef = useRef(activeAlert);
 
+  // Wake Lock Ref and Helpers
+  const wakeLockRef = useRef<any>(null);
+
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        if (wakeLockRef.current !== null) {
+          await wakeLockRef.current.release();
+          wakeLockRef.current = null;
+        }
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        console.log('[WakeLock] Adquirido com sucesso.');
+      }
+    } catch (err) {
+      console.warn('[WakeLock] Erro ao obter Wake Lock:', err);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    try {
+      if (wakeLockRef.current !== null) {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        console.log('[WakeLock] Libertado com sucesso.');
+      }
+    } catch (err) {
+      console.warn('[WakeLock] Erro ao libertar Wake Lock:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (gpsActive) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+    return () => {
+      releaseWakeLock();
+    };
+  }, [gpsActive]);
+
   // Keep safety references synchronized with state updates
   useEffect(() => {
     activeAlertRef.current = activeAlert;
@@ -799,13 +842,21 @@ export default function App() {
             } else {
               // Code 2 (POSITION_UNAVAILABLE) or Code 3 (TIMEOUT).
               // On many mobile browsers, the watcher stream can freeze or die after an error.
-              // Let's schedule a clean watch restart in 3 seconds to recover connection with the GPS hardware.
-              console.log('[GPS] Temporary error, scheduling a watch restart in 3 seconds...');
-              setTimeout(() => {
-                if (gpsActiveRef.current) {
-                  startWatching();
-                }
-              }, 3000);
+              // Let's schedule a clean watch restart in 3 seconds to recover connection with the GPS hardware,
+              // BUT ONLY if the document is visible! If the document is hidden/in background, we MUST NOT
+              // clear the watch, because a running watch might recover on its own, whereas starting a new
+              // watch in the background is guaranteed to be blocked by the browser!
+              console.log('[GPS] Temporary error in background/foreground. Error code:', error.code);
+              if (document.visibilityState === 'visible') {
+                console.log('[GPS] App is visible, scheduling a watch restart in 3 seconds...');
+                setTimeout(() => {
+                  if (gpsActiveRef.current && document.visibilityState === 'visible') {
+                    startWatching();
+                  }
+                }, 3000);
+              } else {
+                console.log('[GPS] App is in background. Keeping the active watch running to let it recover natively.');
+              }
             }
           },
           {
@@ -824,8 +875,9 @@ export default function App() {
           return;
         }
         if (gpsActiveRef.current) {
-          console.log('[GPS] Window visible or focused, refreshing geolocation stream...');
+          console.log('[GPS] Window visible or focused, refreshing geolocation stream and wake lock...');
           startWatching();
+          requestWakeLock();
         }
       };
 
