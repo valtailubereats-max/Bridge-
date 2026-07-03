@@ -134,8 +134,16 @@ export default function InteractiveMap({
     };
   }, []);
 
+  const isEditingLocationRef = useRef(isEditingLocation);
   useEffect(() => {
-    if (isEditingLocation && editingBridge) {
+    isEditingLocationRef.current = isEditingLocation;
+  }, [isEditingLocation]);
+
+  // Center map on the bridge when entering location edit mode
+  useEffect(() => {
+    if (isEditingLocation && editingBridge && mapRef.current) {
+      const latLng: L.LatLngExpression = [editingBridge.latitude, editingBridge.longitude];
+      mapRef.current.setView(latLng, Math.max(mapRef.current.getZoom(), 17), { animate: true });
       setDraggedCoords({
         latitude: editingBridge.latitude,
         longitude: editingBridge.longitude,
@@ -274,6 +282,15 @@ export default function InteractiveMap({
 
     // Detect map move events to update the center state (useful for offline status checking)
     setMapCenterState({ latitude: map.getCenter().lat, longitude: map.getCenter().lng });
+    
+    const handleMapMove = () => {
+      if (isEditingLocationRef.current) {
+        const center = map.getCenter();
+        setDraggedCoords({ latitude: center.lat, longitude: center.lng });
+      }
+    };
+
+    map.on('move', handleMapMove);
     map.on('moveend', () => {
       const center = map.getCenter();
       const coords = { latitude: center.lat, longitude: center.lng };
@@ -292,6 +309,7 @@ export default function InteractiveMap({
           return next;
         });
       }
+      handleMapMove();
     });
 
     // Use robust event delegation on the map container to handle click events on popup buttons.
@@ -394,6 +412,8 @@ export default function InteractiveMap({
         mapRef.current.off('click');
         mapRef.current.off('popupopen');
         mapRef.current.off('zoomend');
+        mapRef.current.off('move', handleMapMove);
+        mapRef.current.off('moveend');
         mapRef.current.remove();
         mapRef.current = null;
       }
@@ -402,8 +422,11 @@ export default function InteractiveMap({
 
   // 6. Mostrar no mapa apenas pontes com altura igual ou inferior a 4 metros ou nulas (cadastro rápido / pendentes)
   const mapBridges = React.useMemo(() => {
+    if (isEditingLocation && editingBridge) {
+      return bridges.filter(b => (b.altura_maxima === null || b.altura_maxima <= 4) && b.id !== editingBridge.id);
+    }
     return bridges.filter(b => b.altura_maxima === null || b.altura_maxima <= 4);
-  }, [bridges]);
+  }, [bridges, isEditingLocation, editingBridge]);
 
   // Calculate grouped bridges for clustering nearby records (within 30m)
   const groupedBridges = React.useMemo(() => {
@@ -983,6 +1006,26 @@ export default function InteractiveMap({
       <div id="map-canvas-container" className="relative w-full flex-1 rounded-none overflow-hidden border-t border-b border-slate-700 bg-slate-950 shadow-inner z-10">
         <div ref={mapContainerRef} className="w-full h-full" id="live-navigation-map" />
 
+        {/* Fixed Center Pin Overlay for mobile-friendly location selection */}
+        {isEditingLocation && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[1001]">
+            <div className="relative flex flex-col items-center justify-end h-16 w-16 -translate-y-8">
+              {/* Pulsing circle at the base/tip of the pin */}
+              <div className="absolute bottom-0 w-3 h-1.5 bg-black/40 rounded-full animate-ping" />
+              {/* Outer visual pulse */}
+              <div className="absolute bottom-0 w-5 h-2.5 bg-blue-500/30 rounded-full animate-pulse border border-blue-400/20" />
+              {/* The Pin itself */}
+              <div className="absolute bottom-0 translate-y-[-4px] flex flex-col items-center">
+                <div className="flex items-center justify-center w-12 h-12 bg-blue-600 border-2 border-white rounded-full shadow-2xl animate-bounce">
+                  <MapPin className="h-6 w-6 text-white" />
+                </div>
+                {/* Visual arrow at the bottom of the circle */}
+                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white -mt-0.5"></div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Floating Quick Add Controls */}
         {!isEditingLocation && (
           <div className="absolute top-3 left-3 right-3 z-[1005] flex flex-col gap-2 pointer-events-none">
@@ -1215,7 +1258,7 @@ export default function InteractiveMap({
 
         {isEditingLocation && editingBridge && (
           <div className="absolute top-3 left-3 right-3 z-[1005] flex flex-col items-center pointer-events-none">
-            <div className="w-full max-w-xs bg-slate-900/95 border border-blue-500 rounded-2xl p-3 shadow-2xl flex flex-col gap-2 backdrop-blur animate-in slide-in-from-top duration-300 pointer-events-auto mt-2">
+            <div className="w-full max-w-xs bg-slate-900/95 border border-blue-500 rounded-2xl p-3.5 shadow-2xl flex flex-col gap-2 backdrop-blur animate-in slide-in-from-top duration-300 pointer-events-auto mt-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse shrink-0" />
@@ -1227,8 +1270,8 @@ export default function InteractiveMap({
                   </span>
                 )}
               </div>
-              <p className="text-[10px] text-slate-300 leading-normal font-medium">
-                Arraste o pino da ponte <span className="text-blue-400 font-bold">"{editingBridge.nome || 'Sem Nome'}"</span> no mapa para a localização pretendida.
+              <p className="text-[11px] text-slate-200 leading-normal font-bold text-center py-1.5 bg-slate-950/40 rounded-xl border border-slate-800">
+                Mova o mapa até o pino ficar no local correto
               </p>
               <div className="grid grid-cols-2 gap-2 mt-1">
                 <button
@@ -1238,7 +1281,7 @@ export default function InteractiveMap({
                       onCancelEditLocation();
                     }
                   }}
-                  className="h-9 text-xs font-bold bg-slate-800 hover:bg-slate-750 active:bg-slate-850 text-slate-300 rounded-xl transition-all border border-slate-700 cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                  className="h-10 text-xs font-bold bg-slate-800 hover:bg-slate-750 active:bg-slate-850 text-slate-300 rounded-xl transition-all border border-slate-700 cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
                 >
                   <X className="h-3.5 w-3.5 text-red-400 shrink-0" />
                   <span>Cancelar</span>
@@ -1250,7 +1293,7 @@ export default function InteractiveMap({
                       onSaveEditLocation(draggedCoords.latitude, draggedCoords.longitude);
                     }
                   }}
-                  className="h-9 text-xs font-black bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-blue-950/20 active:scale-95"
+                  className="h-10 text-xs font-black bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-blue-950/20 active:scale-95"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 text-white shrink-0" />
                   <span>Confirmar Localização</span>
